@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: moira-postgres
+    environment:
+      POSTGRES_DB: moira
+      POSTGRES_USER: moira
+      POSTGRES_PASSWORD: moira
+    ports:
+      - "5432:5432"
+    volumes: 
+     - "moira_postgres_data:/var/lib/postgresql/data"
+    healthcheck:
+      test: [CMD-SHELL, "pq_isready -U moira -d moira"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  moira_postgres_data:

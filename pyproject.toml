@@ -1,0 +1,46 @@
+[project]
+name = "moira"
+version = "0.1.0"
+description = "Backend SaaS de agendamento Moira"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.136.3",
+    "pydantic-settings>=2.14.1",
+    "sqlalchemy[asyncio]>=2.0.50",
+    "uvicorn[standard]>=0.48.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.14",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = "auto"
+markers = [
+    "integration: tests that require external services such as PostgreSQL"
+]
+
+[tool.mypy]
+python_version = 3.12
+plugins = []
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+check_untyped_defs = true
