@@ -14,10 +14,8 @@ from app.config import get_settings
 def create_engine() -> AsyncEngine:
     settings = get_settings()
 
-    return create_async_engine(
-        settings.database_url,
-        pool_pre_ping=True
-    )
+    return create_async_engine(settings.database_url, pool_pre_ping=True)
+
 
 engine = create_engine()
 
@@ -27,9 +25,11 @@ async_session_factory = async_sessionmaker(
     expire_on_commit=False,
 )
 
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     async with async_session_factory() as session:
         yield session
+
 
 async def check_database_ready() -> bool:
     try:
@@ -37,5 +37,5 @@ async def check_database_ready() -> bool:
             await connection.execute(text("SELECT 1"))
     except Exception:
         return False
-    
+
     return True

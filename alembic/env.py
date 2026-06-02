@@ -4,11 +4,11 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import app.modules.appointments.infrastucture.models  #noqa: F401
-import app.modules.auth.infrastucture.models  #noqa: F401
-import app.modules.customers.infrastucture.models  #noqa: F401
-import app.modules.offerings.infrastucture.models  #noqa: F401
-import app.modules.providers.infrastucture.models  #noqa: F401
+import app.modules.appointments.infrastucture.models  # noqa: F401
+import app.modules.auth.infrastucture.models  # noqa: F401
+import app.modules.customers.infrastucture.models  # noqa: F401
+import app.modules.offerings.infrastucture.models  # noqa: F401
+import app.modules.providers.infrastucture.models  # noqa: F401
 from alembic import context
 from app.config import get_settings
 from app.shared.infrastructure.base import Base
@@ -32,6 +32,7 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
 
 def get_url() -> str:
     return get_settings().database_url
@@ -63,13 +64,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
-    context.configure(
-        connection=connection,
-        target_metadata=target_metadata
-    )
-        
+    context.configure(connection=connection, target_metadata=target_metadata)
+
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations() -> None:
     configuration = config.get_section(config.config_ini_section, {})
@@ -85,6 +84,7 @@ async def run_async_migrations() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+
 
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())

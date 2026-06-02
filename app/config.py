@@ -16,8 +16,7 @@ class Settings(BaseSettings):
     )
 
     jwt_secret_key: str = Field(
-        default="change-me-in-local-dev",
-        alias="JWT_SECRET_KEY"
+        default="change-me-in-local-dev", alias="JWT_SECRET_KEY"
     )
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_access_token_expire_minutes: int = Field(
@@ -29,9 +28,8 @@ class Settings(BaseSettings):
     default_timezone: str = Field(default="America/Fortaleza", alias="DEFAULT_TIMEZONE")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=list,
-        alias="CORS_ALLOWED_ORIGINS"
-        )
+        default_factory=list, alias="CORS_ALLOWED_ORIGINS"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -45,11 +43,12 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             if not value.strip():
                 return []
-            
+
             return [origin.strip() for origin in value.split(",") if origin.strip()]
-        
+
         return value
-    
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

@@ -35,9 +35,7 @@ class Provider(Base, TimestampMixin):
     )
 
     timezone: Mapped[str] = mapped_column(
-        String(64),
-        nullable=False,
-        default="America/Fortaleza"
+        String(64), nullable=False, default="America/Fortaleza"
     )
 
     currency_code: Mapped[str] = mapped_column(

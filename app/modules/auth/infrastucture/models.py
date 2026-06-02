@@ -12,9 +12,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[UUID] = mapped_column(
-        pgUUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4
+        pgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
 
     email: Mapped[str] = mapped_column(
