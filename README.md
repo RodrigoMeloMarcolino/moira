@@ -128,4 +128,6 @@ Quando os models SQLAlchemy forem criados, o `target_metadata` do Alembic devera
 
 ## Fonte de verdade
 
-As decisoes de produto e arquitetura deste backend seguem o documento `Livedoc - SaaS de Agendamento MVP`.
+As decisoes de produto e arquitetura deste backend seguem o documento
+[Livedoc - SaaS de Agendamento MVP](https://docs.google.com/document/d/1JV_6vdwBUYo6V1Pj9qsVaRVxhXeZv_ZDWFQVpfXgdb4) e as
+[Architecture Decision Records](docs/adr/README.md).

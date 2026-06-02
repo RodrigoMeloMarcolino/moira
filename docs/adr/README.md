@@ -16,3 +16,4 @@ ADRs capture important technical and product decisions, their context, and their
 - [ADR 0008 - Store appointment duration snapshots](0008-store-appointment-duration-snapshots.md)
 - [ADR 0009 - Require service durations to be multiples of 15 minutes in the MVP](0009-require-service-durations-multiple-of-15-minutes.md)
 - [ADR 0010 - Use pragmatic modular architecture](0010-use-pragmatic-modular-architecture.md)
+- [ADR 0011 - Store provider currency and offering prices in minor units](0011-store-provider-currency-and-offering-prices-in-minor-units.md)
