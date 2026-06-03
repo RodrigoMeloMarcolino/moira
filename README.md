@@ -73,6 +73,14 @@ Respostas esperadas:
 
 `/health` valida apenas que a aplicacao esta viva. `/ready` tambem valida a conexao com o PostgreSQL.
 
+## Regras de cadastro
+
+O cadastro inicial de provider (`POST /providers/signup`) aceita senhas de 8 a
+64 caracteres.
+
+A senha nunca deve ser retornada pela API. O backend armazena apenas
+`users.password_hash`, gerado com bcrypt.
+
 ## Qualidade
 
 ```powershell

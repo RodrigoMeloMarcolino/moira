@@ -1,0 +1,25 @@
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.providers.infrastructure.models import Provider
+
+
+class SqlAlchemyProviderRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def find_id_by_slug(self, slug: str) -> UUID | None:
+        return await self.session.scalar(
+            select(Provider.id).where(Provider.slug == slug)
+        )
+
+    async def get_by_id(self, provider_id: UUID) -> Provider | None:
+        return await self.session.get(Provider, provider_id)
+
+    async def get_by_slug(self, slug: str) -> Provider | None:
+        return await self.session.scalar(select(Provider).where(Provider.slug == slug))
+
+    async def add(self, provider: Provider) -> None:
+        self.session.add(provider)

@@ -2,6 +2,8 @@ from fastapi import FastAPI
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.routers.health import health_router
+from app.api.routers.offerings import offerings_router
+from app.api.routers.providers import providers_router
 from app.config import get_settings
 
 
@@ -12,6 +14,8 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(providers_router)
+    app.include_router(offerings_router)
 
     return app
 

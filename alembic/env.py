@@ -4,11 +4,11 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import app.modules.appointments.infrastucture.models  # noqa: F401
-import app.modules.auth.infrastucture.models  # noqa: F401
-import app.modules.customers.infrastucture.models  # noqa: F401
-import app.modules.offerings.infrastucture.models  # noqa: F401
-import app.modules.providers.infrastucture.models  # noqa: F401
+import app.modules.appointments.infrastructure.models  # noqa: F401
+import app.modules.auth.infrastructure.models  # noqa: F401
+import app.modules.customers.infrastructure.models  # noqa: F401
+import app.modules.offerings.infrastructure.models  # noqa: F401
+import app.modules.providers.infrastructure.models  # noqa: F401
 from alembic import context
 from app.config import get_settings
 from app.shared.infrastructure.base import Base
