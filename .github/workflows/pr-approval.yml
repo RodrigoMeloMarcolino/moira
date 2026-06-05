@@ -33,6 +33,15 @@ jobs:
               return;
             }
 
+            const exemptAuthors = new Set(["RodrigoMeloMarcolino"]);
+
+            if (exemptAuthors.has(pullRequest.user.login)) {
+              core.info(
+                `Approval gate skipped because ${pullRequest.user.login} is an exempt PR author.`
+              );
+              return;
+            }
+
             const allowedAssociations = new Set([
               "OWNER",
               "MEMBER",
