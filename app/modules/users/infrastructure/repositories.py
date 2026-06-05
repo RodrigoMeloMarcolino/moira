@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.infrastructure.models import User
+from app.modules.users.infrastructure.models import User
 
 
 class SqlAlchemyUserRepository:

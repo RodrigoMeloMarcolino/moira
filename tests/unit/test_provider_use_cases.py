@@ -3,7 +3,6 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.modules.auth.domain.password_policy import SignupPasswordPolicyError
-from app.modules.auth.infrastructure.models import User
 from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
     ProviderNotFound,
@@ -16,21 +15,29 @@ from app.modules.providers.application.use_cases import (
 )
 from app.modules.providers.infrastructure.models import Provider
 from app.modules.providers.schemas.catalog import ProviderSignupCreate
+from app.modules.users.application.exceptions import UserEmailAlreadyExists
+from app.modules.users.infrastructure.models import User
 from app.shared.application.exceptions import UnitOfWorkConflict
 
 
-class FakeUserRepository:
-    def __init__(self, existing_email_id: UUID | None = None) -> None:
-        self.existing_email_id = existing_email_id
-        self.added: list[User] = []
+class FakeCreateUserUseCase:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.created: list[tuple[str, str]] = []
+        self.users: list[User] = []
 
-    async def find_id_by_email(self, email: str) -> UUID | None:
-        _ = email
-        return self.existing_email_id
+    async def execute(self, *, email: str, password: str) -> User:
+        if self.error is not None:
+            raise self.error
 
-    async def add(self, user: User) -> None:
-        user.id = uuid4()
-        self.added.append(user)
+        user = User(
+            id=uuid4(),
+            email=email,
+            password_hash=f"hashed:{password}",
+        )
+        self.created.append((email, password))
+        self.users.append(user)
+        return user
 
 
 class FakeProviderRepository:
@@ -58,18 +65,6 @@ class FakeProviderRepository:
 
     async def add(self, provider: Provider) -> None:
         self.added.append(provider)
-
-
-class FakePasswordHasher:
-    def __init__(self) -> None:
-        self.hashed_passwords: list[str] = []
-
-    def hash(self, password: str) -> str:
-        self.hashed_passwords.append(password)
-        return f"hashed:{password}"
-
-    def verify(self, password: str, password_hash: str) -> bool:
-        return password_hash == f"hashed:{password}"
 
 
 class FakeUnitOfWork:
@@ -109,29 +104,25 @@ def provider_signup_payload(password: str = "secure-password") -> ProviderSignup
 
 def signup_use_case(
     *,
-    users: FakeUserRepository | None = None,
+    create_user: FakeCreateUserUseCase | None = None,
     providers: FakeProviderRepository | None = None,
-    hasher: FakePasswordHasher | None = None,
     unit_of_work: FakeUnitOfWork | None = None,
 ) -> SignupProviderUseCase:
     return SignupProviderUseCase(
-        users=users or FakeUserRepository(),
+        create_user=create_user or FakeCreateUserUseCase(),
         providers=providers or FakeProviderRepository(),
-        password_hasher=hasher or FakePasswordHasher(),
         unit_of_work=unit_of_work or FakeUnitOfWork(),
     )
 
 
 @pytest.mark.asyncio
 async def test_signup_provider_creates_user_and_provider() -> None:
-    users = FakeUserRepository()
+    create_user = FakeCreateUserUseCase()
     providers = FakeProviderRepository()
-    hasher = FakePasswordHasher()
     unit_of_work = FakeUnitOfWork()
     use_case = signup_use_case(
-        users=users,
+        create_user=create_user,
         providers=providers,
-        hasher=hasher,
         unit_of_work=unit_of_work,
     )
 
@@ -140,10 +131,10 @@ async def test_signup_provider_creates_user_and_provider() -> None:
     assert unit_of_work.flushed is True
     assert unit_of_work.committed is True
     assert unit_of_work.refreshed is provider
-    assert hasher.hashed_passwords == ["secure-password"]
 
-    assert len(users.added) == 1
-    user = users.added[0]
+    assert create_user.created == [("provider@example.com", "secure-password")]
+    assert len(create_user.users) == 1
+    user = create_user.users[0]
     assert user.email == "provider@example.com"
     assert user.password_hash == "hashed:secure-password"
 
@@ -157,9 +148,9 @@ async def test_signup_provider_creates_user_and_provider() -> None:
 
 @pytest.mark.asyncio
 async def test_signup_provider_rejects_invalid_password_before_repositories() -> None:
-    users = FakeUserRepository()
+    create_user = FakeCreateUserUseCase()
     providers = FakeProviderRepository()
-    use_case = signup_use_case(users=users, providers=providers)
+    use_case = signup_use_case(create_user=create_user, providers=providers)
     payload = ProviderSignupCreate.model_construct(
         email="provider@example.com",
         password="a" * 7,
@@ -172,14 +163,14 @@ async def test_signup_provider_rejects_invalid_password_before_repositories() ->
     with pytest.raises(SignupPasswordPolicyError):
         await use_case.execute(payload)
 
-    assert users.added == []
+    assert create_user.created == []
     assert providers.added == []
 
 
 @pytest.mark.asyncio
 async def test_signup_provider_rejects_duplicate_email() -> None:
-    users = FakeUserRepository(existing_email_id=uuid4())
-    use_case = signup_use_case(users=users)
+    create_user = FakeCreateUserUseCase(error=UserEmailAlreadyExists())
+    use_case = signup_use_case(create_user=create_user)
 
     with pytest.raises(ProviderEmailAlreadyExists):
         await use_case.execute(provider_signup_payload())

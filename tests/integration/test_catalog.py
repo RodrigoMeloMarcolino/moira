@@ -8,8 +8,8 @@ from sqlalchemy import select
 
 from app.database import async_session_factory, engine
 from app.main import create_app
-from app.modules.auth.infrastructure.models import User
 from app.modules.auth.infrastructure.passwords import BcryptPasswordHasher
+from app.modules.users.infrastructure.models import User
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 

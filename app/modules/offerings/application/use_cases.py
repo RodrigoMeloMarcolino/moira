@@ -5,7 +5,7 @@ from app.modules.offerings.application.ports import OfferingRepository
 from app.modules.offerings.infrastructure.models import Offering
 from app.modules.offerings.schemas.catalog import OfferingCreate, OfferingUpdate
 from app.modules.providers.application.exceptions import ProviderNotFound
-from app.modules.providers.application.ports import ProviderRepository
+from app.modules.providers.application.output_ports import ProviderRepository
 from app.shared.application.unit_of_work import UnitOfWork
 
 
