@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.modules.auth.infrastructure.passwords import BcryptPasswordHasher
-from app.modules.auth.infrastructure.repositories import SqlAlchemyUserRepository
 from app.modules.offerings.application.use_cases import (
     CreateOfferingUseCase,
     ListActiveProviderOfferingsUseCase,
@@ -21,16 +20,22 @@ from app.modules.providers.application.use_cases import (
 from app.modules.providers.infrastructure.repositories import (
     SqlAlchemyProviderRepository,
 )
+from app.modules.users.application.use_cases import CreateUserUseCase
+from app.modules.users.infrastructure.repositories import SqlAlchemyUserRepository
 from app.shared.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 def build_signup_provider_use_case(session: SessionDep) -> SignupProviderUseCase:
-    return SignupProviderUseCase(
+    create_user = CreateUserUseCase(
         users=SqlAlchemyUserRepository(session),
-        providers=SqlAlchemyProviderRepository(session),
         password_hasher=BcryptPasswordHasher(),
+    )
+
+    return SignupProviderUseCase(
+        create_user=create_user,
+        providers=SqlAlchemyProviderRepository(session),
         unit_of_work=SqlAlchemyUnitOfWork(session),
     )
 

@@ -1,15 +1,15 @@
-from app.modules.auth.application.ports import PasswordHasher
 from app.modules.auth.domain.password_policy import validate_signup_password
-from app.modules.auth.infrastructure.models import User
 from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
     ProviderNotFound,
     ProviderSignupConflict,
     ProviderSlugAlreadyExists,
 )
-from app.modules.providers.application.ports import ProviderRepository, UserRepository
+from app.modules.providers.application.output_ports import ProviderRepository
 from app.modules.providers.infrastructure.models import Provider
 from app.modules.providers.schemas.catalog import ProviderSignupCreate
+from app.modules.users.application.exceptions import UserEmailAlreadyExists
+from app.modules.users.application.input_ports import UserCreator
 from app.shared.application.exceptions import UnitOfWorkConflict
 from app.shared.application.unit_of_work import UnitOfWork
 
@@ -17,32 +17,29 @@ from app.shared.application.unit_of_work import UnitOfWork
 class SignupProviderUseCase:
     def __init__(
         self,
-        users: UserRepository,
+        create_user: UserCreator,
         providers: ProviderRepository,
-        password_hasher: PasswordHasher,
         unit_of_work: UnitOfWork,
     ) -> None:
-        self.users = users
+        self.create_user = create_user
         self.providers = providers
-        self.password_hasher = password_hasher
         self.unit_of_work = unit_of_work
 
     async def execute(self, payload: ProviderSignupCreate) -> Provider:
         validate_signup_password(payload.password)
 
-        existing_email = await self.users.find_id_by_email(payload.email)
-        if existing_email is not None:
-            raise ProviderEmailAlreadyExists
-
         existing_slug = await self.providers.find_id_by_slug(payload.slug)
         if existing_slug is not None:
             raise ProviderSlugAlreadyExists
 
-        user = User(
-            email=payload.email,
-            password_hash=self.password_hasher.hash(payload.password),
-        )
-        await self.users.add(user)
+        try:
+            user = await self.create_user.execute(
+                email=payload.email,
+                password=payload.password,
+            )
+        except UserEmailAlreadyExists as exc:
+            raise ProviderEmailAlreadyExists from exc
+
         await self.unit_of_work.flush()
 
         provider = Provider(
