@@ -1,0 +1,223 @@
+from unittest.mock import AsyncMock, Mock
+from uuid import UUID, uuid4
+
+import pytest
+
+from app.modules.auth.domain.password_policy import SignupPasswordPolicyError
+from app.modules.providers.application.exceptions import (
+    ProviderEmailAlreadyExists,
+    ProviderNotFound,
+    ProviderSignupConflict,
+    ProviderSlugAlreadyExists,
+)
+from app.modules.providers.application.output_ports import ProviderRepository
+from app.modules.providers.application.use_cases import (
+    GetProviderBySlugUseCase,
+    SignupProviderUseCase,
+)
+from app.modules.providers.infrastructure.models import Provider
+from app.modules.providers.schemas.catalog import ProviderSignupCreate
+from app.modules.users.application.exceptions import UserEmailAlreadyExists
+from app.modules.users.application.input_ports import UserCreator
+from app.modules.users.infrastructure.models import User
+from app.shared.application.exceptions import UnitOfWorkConflict
+from app.shared.application.unit_of_work import UnitOfWork
+
+
+def provider_signup_payload(password: str = "secure-password") -> ProviderSignupCreate:
+    return ProviderSignupCreate(
+        email="provider@example.com",
+        password=password,
+        display_name="Provider Test",
+        slug="provider-test",
+    )
+
+
+def user() -> User:
+    return User(
+        id=uuid4(),
+        email="provider@example.com",
+        password_hash="hashed:secure-password",
+    )
+
+
+def user_creator_mock(
+    *,
+    returned_user: User | None = None,
+    error: Exception | None = None,
+) -> Mock:
+    create_user = Mock(spec=UserCreator)
+    create_user.execute = AsyncMock(
+        side_effect=error,
+        return_value=returned_user or user(),
+    )
+    return create_user
+
+
+def provider_repository_mock(
+    *,
+    existing_slug_id: UUID | None = None,
+    provider_by_slug: Provider | None = None,
+) -> Mock:
+    providers = Mock(spec=ProviderRepository)
+    providers.find_id_by_slug = AsyncMock(return_value=existing_slug_id)
+    providers.get_by_slug = AsyncMock(return_value=provider_by_slug)
+    providers.add = AsyncMock()
+    return providers
+
+
+def unit_of_work_mock(*, commit_error: Exception | None = None) -> Mock:
+    unit_of_work = Mock(spec=UnitOfWork)
+    unit_of_work.flush = AsyncMock()
+    unit_of_work.commit = AsyncMock(side_effect=commit_error)
+    unit_of_work.rollback = AsyncMock()
+    unit_of_work.refresh = AsyncMock()
+    return unit_of_work
+
+
+def signup_use_case(
+    *,
+    create_user: Mock | None = None,
+    providers: Mock | None = None,
+    unit_of_work: Mock | None = None,
+) -> SignupProviderUseCase:
+    return SignupProviderUseCase(
+        create_user=create_user or user_creator_mock(),
+        providers=providers or provider_repository_mock(),
+        unit_of_work=unit_of_work or unit_of_work_mock(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_creates_user_and_provider() -> None:
+    created_user = user()
+    create_user = user_creator_mock(returned_user=created_user)
+    providers = provider_repository_mock()
+    unit_of_work = unit_of_work_mock()
+    use_case = signup_use_case(
+        create_user=create_user,
+        providers=providers,
+        unit_of_work=unit_of_work,
+    )
+
+    provider = await use_case.execute(provider_signup_payload())
+
+    providers.find_id_by_slug.assert_awaited_once_with("provider-test")
+    create_user.execute.assert_awaited_once_with(
+        email="provider@example.com",
+        password="secure-password",
+    )
+    unit_of_work.flush.assert_awaited_once_with()
+    providers.add.assert_awaited_once_with(provider)
+    unit_of_work.commit.assert_awaited_once_with()
+    unit_of_work.refresh.assert_awaited_once_with(provider)
+    unit_of_work.rollback.assert_not_awaited()
+
+    assert provider.user_id == created_user.id
+    assert provider.display_name == "Provider Test"
+    assert provider.slug == "provider-test"
+    assert provider.timezone == "America/Fortaleza"
+    assert provider.currency_code == "BRL"
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_rejects_invalid_password_before_repositories() -> None:
+    create_user = user_creator_mock()
+    providers = provider_repository_mock()
+    unit_of_work = unit_of_work_mock()
+    use_case = signup_use_case(
+        create_user=create_user,
+        providers=providers,
+        unit_of_work=unit_of_work,
+    )
+    payload = ProviderSignupCreate.model_construct(
+        email="provider@example.com",
+        password="a" * 7,
+        display_name="Provider Test",
+        slug="provider-test",
+        timezone="America/Fortaleza",
+        currency_code="BRL",
+    )
+
+    with pytest.raises(SignupPasswordPolicyError):
+        await use_case.execute(payload)
+
+    providers.find_id_by_slug.assert_not_awaited()
+    create_user.execute.assert_not_awaited()
+    providers.add.assert_not_awaited()
+    unit_of_work.flush.assert_not_awaited()
+    unit_of_work.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_rejects_duplicate_email() -> None:
+    create_user = user_creator_mock(error=UserEmailAlreadyExists())
+    providers = provider_repository_mock()
+    use_case = signup_use_case(create_user=create_user, providers=providers)
+
+    with pytest.raises(ProviderEmailAlreadyExists):
+        await use_case.execute(provider_signup_payload())
+
+    providers.find_id_by_slug.assert_awaited_once_with("provider-test")
+    create_user.execute.assert_awaited_once_with(
+        email="provider@example.com",
+        password="secure-password",
+    )
+    providers.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_rejects_duplicate_slug() -> None:
+    create_user = user_creator_mock()
+    providers = provider_repository_mock(existing_slug_id=uuid4())
+    use_case = signup_use_case(create_user=create_user, providers=providers)
+
+    with pytest.raises(ProviderSlugAlreadyExists):
+        await use_case.execute(provider_signup_payload())
+
+    providers.find_id_by_slug.assert_awaited_once_with("provider-test")
+    create_user.execute.assert_not_awaited()
+    providers.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_rolls_back_on_unit_of_work_conflict() -> None:
+    unit_of_work = unit_of_work_mock(commit_error=UnitOfWorkConflict())
+    use_case = signup_use_case(unit_of_work=unit_of_work)
+
+    with pytest.raises(ProviderSignupConflict):
+        await use_case.execute(provider_signup_payload())
+
+    unit_of_work.commit.assert_awaited_once_with()
+    unit_of_work.rollback.assert_awaited_once_with()
+    unit_of_work.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_provider_by_slug_returns_provider() -> None:
+    expected_provider = Provider(
+        id=uuid4(),
+        user_id=uuid4(),
+        display_name="Provider Test",
+        slug="provider-test",
+        timezone="America/Fortaleza",
+        currency_code="BRL",
+    )
+    providers = provider_repository_mock(provider_by_slug=expected_provider)
+    use_case = GetProviderBySlugUseCase(providers=providers)
+
+    provider = await use_case.execute("provider-test")
+
+    providers.get_by_slug.assert_awaited_once_with("provider-test")
+    assert provider is expected_provider
+
+
+@pytest.mark.asyncio
+async def test_get_provider_by_slug_raises_when_missing() -> None:
+    providers = provider_repository_mock()
+    use_case = GetProviderBySlugUseCase(providers=providers)
+
+    with pytest.raises(ProviderNotFound):
+        await use_case.execute("missing-provider")
+
+    providers.get_by_slug.assert_awaited_once_with("missing-provider")

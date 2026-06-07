@@ -4,7 +4,18 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+from app.modules.appointments.application.use_cases import BookPublicAppointmentUseCase
+from app.modules.appointments.infrastructure.repositories import (
+    SQLAlchemyAppointmentRepository,
+    SQLAlchemyAppointmentSlotRepository,
+)
 from app.modules.auth.infrastructure.passwords import BcryptPasswordHasher
+from app.modules.customers.application.use_cases import (
+    GetOrCreateCustomerByPhoneUseCase,
+)
+from app.modules.customers.infrastructure.repositories import (
+    SQLAlchemyCustomerRepository,
+)
 from app.modules.offerings.application.use_cases import (
     CreateOfferingUseCase,
     ListActiveProviderOfferingsUseCase,
@@ -72,6 +83,23 @@ def build_update_offering_use_case(session: SessionDep) -> UpdateOfferingUseCase
     )
 
 
+def build_book_public_appointment_use_case(
+    session: SessionDep,
+) -> BookPublicAppointmentUseCase:
+    get_or_create_customer_by_phone_use_case = GetOrCreateCustomerByPhoneUseCase(
+        customers=SQLAlchemyCustomerRepository(session),
+    )
+
+    return BookPublicAppointmentUseCase(
+        appointments=SQLAlchemyAppointmentRepository(session),
+        appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
+        offerings=SqlAlchemyOfferingRepository(session),
+        providers=SqlAlchemyProviderRepository(session),
+        get_or_create_customer_by_phone=get_or_create_customer_by_phone_use_case,
+        uow=SqlAlchemyUnitOfWork(session),
+    )
+
+
 SignupProviderUseCaseDep = Annotated[
     SignupProviderUseCase,
     Depends(build_signup_provider_use_case),
@@ -91,4 +119,8 @@ ListActiveProviderOfferingsUseCaseDep = Annotated[
 UpdateOfferingUseCaseDep = Annotated[
     UpdateOfferingUseCase,
     Depends(build_update_offering_use_case),
+]
+BookPublicAppointmentUseCaseDep = Annotated[
+    BookPublicAppointmentUseCase,
+    Depends(build_book_public_appointment_use_case),
 ]

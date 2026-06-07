@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.modules.offerings.application.exceptions import OfferingNotFound
-from app.modules.offerings.application.ports import OfferingRepository
+from app.modules.offerings.application.output_ports import OfferingRepository
 from app.modules.offerings.infrastructure.models import Offering
 from app.modules.offerings.schemas.catalog import OfferingCreate, OfferingUpdate
 from app.modules.providers.application.exceptions import ProviderNotFound

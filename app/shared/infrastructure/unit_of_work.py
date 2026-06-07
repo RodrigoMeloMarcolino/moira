@@ -9,7 +9,10 @@ class SqlAlchemyUnitOfWork:
         self.session = session
 
     async def flush(self) -> None:
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            raise UnitOfWorkConflict from exc
 
     async def commit(self) -> None:
         try:

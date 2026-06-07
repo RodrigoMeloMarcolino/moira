@@ -23,7 +23,13 @@ The MVP must not add a separate `canonical_phone` column.
 The `customers` table should enforce uniqueness on `phone`. Email is optional
 and must not be the primary identity key for customers in the MVP.
 
-When an existing customer is found by phone, the application may update the name with the latest submitted value and fill email only if it is currently empty.
+When an existing customer is found by phone, the application may eventually
+update the name with the latest submitted value and fill email only if it is
+currently empty.
+
+For the initial public booking implementation, this profile update flow will
+not be implemented. The system will reuse the existing customer by canonical
+phone and keep the existing global customer data unchanged.
 
 ## Consequences
 
@@ -33,3 +39,6 @@ When an existing customer is found by phone, the application may update the name
 - Customer creation and reuse must happen inside appointment creation transactions.
 - A customer can have appointments with multiple providers.
 - Provider-specific relationship data should not be stored directly on the global customer record in the MVP.
+- The first public booking flow may discard submitted customer name/email when
+  the phone already belongs to an existing customer, because automatic global
+  profile updates are intentionally deferred.

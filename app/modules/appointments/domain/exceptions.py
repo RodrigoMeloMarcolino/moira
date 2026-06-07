@@ -1,0 +1,2 @@
+class StartOutOfBoundary(Exception):
+    pass
