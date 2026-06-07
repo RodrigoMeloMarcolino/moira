@@ -4,11 +4,11 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.modules.auth.domain.password_policy import SignupPasswordPolicyError
+from app.modules.providers.application import use_cases as provider_use_cases
 from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
     ProviderNotFound,
     ProviderSignupConflict,
-    ProviderSlugAlreadyExists,
 )
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.modules.providers.application.use_cases import (
@@ -29,7 +29,6 @@ def provider_signup_payload(password: str = "secure-password") -> ProviderSignup
         email="provider@example.com",
         password=password,
         display_name="Provider Test",
-        slug="provider-test",
     )
 
 
@@ -89,7 +88,9 @@ def signup_use_case(
 
 
 @pytest.mark.asyncio
-async def test_signup_provider_creates_user_and_provider() -> None:
+async def test_signup_provider_creates_user_and_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     created_user = user()
     create_user = user_creator_mock(returned_user=created_user)
     providers = provider_repository_mock()
@@ -100,9 +101,16 @@ async def test_signup_provider_creates_user_and_provider() -> None:
         unit_of_work=unit_of_work,
     )
 
+    slug = "provider-test-a1b2c3d4"
+    monkeypatch.setattr(
+        provider_use_cases,
+        "generate_provider_slug",
+        lambda display_name: slug,
+    )
+
     provider = await use_case.execute(provider_signup_payload())
 
-    providers.find_id_by_slug.assert_awaited_once_with("provider-test")
+    providers.find_id_by_slug.assert_awaited_once_with(slug)
     create_user.execute.assert_awaited_once_with(
         email="provider@example.com",
         password="secure-password",
@@ -115,7 +123,7 @@ async def test_signup_provider_creates_user_and_provider() -> None:
 
     assert provider.user_id == created_user.id
     assert provider.display_name == "Provider Test"
-    assert provider.slug == "provider-test"
+    assert provider.slug == slug
     assert provider.timezone == "America/Fortaleza"
     assert provider.currency_code == "BRL"
 
@@ -134,7 +142,6 @@ async def test_signup_provider_rejects_invalid_password_before_repositories() ->
         email="provider@example.com",
         password="a" * 7,
         display_name="Provider Test",
-        slug="provider-test",
         timezone="America/Fortaleza",
         currency_code="BRL",
     )
@@ -150,15 +157,23 @@ async def test_signup_provider_rejects_invalid_password_before_repositories() ->
 
 
 @pytest.mark.asyncio
-async def test_signup_provider_rejects_duplicate_email() -> None:
+async def test_signup_provider_rejects_duplicate_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     create_user = user_creator_mock(error=UserEmailAlreadyExists())
     providers = provider_repository_mock()
     use_case = signup_use_case(create_user=create_user, providers=providers)
 
+    monkeypatch.setattr(
+        provider_use_cases,
+        "generate_provider_slug",
+        lambda display_name: "provider-test-a1b2c3d4",
+    )
+
     with pytest.raises(ProviderEmailAlreadyExists):
         await use_case.execute(provider_signup_payload())
 
-    providers.find_id_by_slug.assert_awaited_once_with("provider-test")
+    providers.find_id_by_slug.assert_awaited_once_with("provider-test-a1b2c3d4")
     create_user.execute.assert_awaited_once_with(
         email="provider@example.com",
         password="secure-password",
@@ -167,30 +182,85 @@ async def test_signup_provider_rejects_duplicate_email() -> None:
 
 
 @pytest.mark.asyncio
-async def test_signup_provider_rejects_duplicate_slug() -> None:
+async def test_signup_provider_retries_when_slug_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     create_user = user_creator_mock()
-    providers = provider_repository_mock(existing_slug_id=uuid4())
-    use_case = signup_use_case(create_user=create_user, providers=providers)
+    providers = provider_repository_mock()
+    providers.find_id_by_slug = AsyncMock(side_effect=[uuid4(), None])
+    unit_of_work = unit_of_work_mock()
+    use_case = signup_use_case(
+        create_user=create_user,
+        providers=providers,
+        unit_of_work=unit_of_work,
+    )
 
-    with pytest.raises(ProviderSlugAlreadyExists):
-        await use_case.execute(provider_signup_payload())
+    slugs = iter(["provider-test-a1b2c3d4", "provider-test-b5c6d7e8"])
+    monkeypatch.setattr(
+        provider_use_cases,
+        "generate_provider_slug",
+        lambda display_name: next(slugs),
+    )
 
-    providers.find_id_by_slug.assert_awaited_once_with("provider-test")
-    create_user.execute.assert_not_awaited()
-    providers.add.assert_not_awaited()
+    provider = await use_case.execute(provider_signup_payload())
+
+    assert provider.slug == "provider-test-b5c6d7e8"
+    assert providers.find_id_by_slug.await_count == 2
+    assert create_user.execute.await_count == 1
+    assert providers.add.await_count == 1
+    assert unit_of_work.commit.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_signup_provider_rolls_back_on_unit_of_work_conflict() -> None:
+async def test_signup_provider_rolls_back_on_unit_of_work_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     unit_of_work = unit_of_work_mock(commit_error=UnitOfWorkConflict())
-    use_case = signup_use_case(unit_of_work=unit_of_work)
+    providers = provider_repository_mock()
+    use_case = signup_use_case(unit_of_work=unit_of_work, providers=providers)
+
+    monkeypatch.setattr(
+        provider_use_cases,
+        "generate_provider_slug",
+        lambda display_name: "provider-test-a1b2c3d4",
+    )
 
     with pytest.raises(ProviderSignupConflict):
         await use_case.execute(provider_signup_payload())
 
-    unit_of_work.commit.assert_awaited_once_with()
-    unit_of_work.rollback.assert_awaited_once_with()
+    assert unit_of_work.commit.await_count == 5
+    assert unit_of_work.rollback.await_count == 5
     unit_of_work.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_retries_after_slug_conflict_on_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_user = user_creator_mock()
+    providers = provider_repository_mock()
+    unit_of_work = unit_of_work_mock()
+    unit_of_work.commit = AsyncMock(side_effect=[UnitOfWorkConflict(), None])
+    use_case = signup_use_case(
+        create_user=create_user,
+        providers=providers,
+        unit_of_work=unit_of_work,
+    )
+
+    slugs = iter(["provider-test-a1b2c3d4", "provider-test-b5c6d7e8"])
+    monkeypatch.setattr(
+        provider_use_cases,
+        "generate_provider_slug",
+        lambda display_name: next(slugs),
+    )
+
+    provider = await use_case.execute(provider_signup_payload())
+
+    assert provider.slug == "provider-test-b5c6d7e8"
+    assert create_user.execute.await_count == 2
+    assert providers.add.await_count == 2
+    assert unit_of_work.commit.await_count == 2
+    assert unit_of_work.rollback.await_count == 1
 
 
 @pytest.mark.asyncio

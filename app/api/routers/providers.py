@@ -5,7 +5,6 @@ from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
     ProviderNotFound,
     ProviderSignupConflict,
-    ProviderSlugAlreadyExists,
 )
 from app.modules.providers.infrastructure.models import Provider
 from app.modules.providers.schemas.catalog import (
@@ -31,11 +30,6 @@ async def signup_provider_account(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="email already exists",
-        ) from exc
-    except ProviderSlugAlreadyExists as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="provider slug already exists",
         ) from exc
     except ProviderSignupConflict as exc:
         raise HTTPException(

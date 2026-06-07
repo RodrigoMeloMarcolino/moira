@@ -28,14 +28,14 @@ def unique_value(prefix: str) -> str:
 
 
 async def signup_provider(client: AsyncClient) -> dict:
-    slug = unique_value("provider")
+    display_name = "Provider Test"
+    email_slug = unique_value("provider")
     response = await client.post(
         "/providers/signup",
         json={
-            "email": f"{slug}@example.com",
+            "email": f"{email_slug}@example.com",
             "password": "secure-password",
-            "display_name": "Provider Test",
-            "slug": slug,
+            "display_name": display_name,
         },
     )
 
@@ -46,16 +46,15 @@ async def signup_provider(client: AsyncClient) -> dict:
 async def test_signup_provider_creates_user_and_provider(
     client: AsyncClient,
 ) -> None:
-    slug = unique_value("provider")
+    email_slug = unique_value("provider")
     password = "secure-password"
 
     response = await client.post(
         "/providers/signup",
         json={
-            "email": f"{slug}@example.com",
+            "email": f"{email_slug}@example.com",
             "password": password,
             "display_name": "Provider Test",
-            "slug": slug,
         },
     )
 
@@ -64,7 +63,8 @@ async def test_signup_provider_creates_user_and_provider(
     assert body["id"]
     assert body["user_id"]
     assert body["display_name"] == "Provider Test"
-    assert body["slug"] == slug
+    assert body["slug"].startswith("provider-test-")
+    assert len(body["slug"]) <= 80
     assert body["timezone"] == "America/Fortaleza"
     assert body["currency_code"] == "BRL"
     assert "password" not in body
@@ -85,15 +85,14 @@ async def test_signup_provider_accepts_functional_password_boundaries(
     client: AsyncClient,
     password: str,
 ) -> None:
-    slug = unique_value("provider")
+    email_slug = unique_value("provider")
 
     response = await client.post(
         "/providers/signup",
         json={
-            "email": f"{slug}@example.com",
+            "email": f"{email_slug}@example.com",
             "password": password,
             "display_name": "Provider Test",
-            "slug": slug,
         },
     )
 
@@ -105,15 +104,14 @@ async def test_signup_provider_rejects_invalid_functional_password_lengths(
     client: AsyncClient,
     password: str,
 ) -> None:
-    slug = unique_value("provider")
+    email_slug = unique_value("provider")
 
     response = await client.post(
         "/providers/signup",
         json={
-            "email": f"{slug}@example.com",
+            "email": f"{email_slug}@example.com",
             "password": password,
             "display_name": "Provider Test",
-            "slug": slug,
         },
     )
 
@@ -123,8 +121,8 @@ async def test_signup_provider_rejects_invalid_functional_password_lengths(
 async def test_signup_provider_rejects_duplicate_email(
     client: AsyncClient,
 ) -> None:
-    slug = unique_value("provider")
-    email = f"{slug}@example.com"
+    email_slug = unique_value("provider")
+    email = f"{email_slug}@example.com"
 
     first_response = await client.post(
         "/providers/signup",
@@ -132,7 +130,6 @@ async def test_signup_provider_rejects_duplicate_email(
             "email": email,
             "password": "secure-password",
             "display_name": "Provider Test",
-            "slug": slug,
         },
     )
     assert first_response.status_code == 201
@@ -143,40 +140,54 @@ async def test_signup_provider_rejects_duplicate_email(
             "email": email,
             "password": "secure-password",
             "display_name": "Other Provider",
-            "slug": unique_value("provider"),
         },
     )
 
     assert response.status_code == 409
 
 
-async def test_signup_provider_rejects_duplicate_slug(
+async def test_signup_provider_generates_distinct_slugs_for_same_display_name(
     client: AsyncClient,
 ) -> None:
-    slug = unique_value("provider")
-
     first_response = await client.post(
         "/providers/signup",
         json={
-            "email": f"{slug}@example.com",
+            "email": f"{unique_value('provider')}@example.com",
             "password": "secure-password",
             "display_name": "Provider Test",
-            "slug": slug,
         },
     )
     assert first_response.status_code == 201
+    first_body = first_response.json()
 
     response = await client.post(
         "/providers/signup",
         json={
             "email": f"{unique_value('provider')}@example.com",
             "password": "secure-password",
-            "display_name": "Other Provider",
-            "slug": slug,
+            "display_name": "Provider Test",
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 201
+    second_body = response.json()
+    assert first_body["slug"] != second_body["slug"]
+    assert first_body["slug"].startswith("provider-test-")
+    assert second_body["slug"].startswith("provider-test-")
+
+
+async def test_signup_provider_rejects_slug_in_body(client: AsyncClient) -> None:
+    response = await client.post(
+        "/providers/signup",
+        json={
+            "email": f"{unique_value('provider')}@example.com",
+            "password": "secure-password",
+            "display_name": "Provider Test",
+            "slug": "provider-test-a1b2c3d4",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 async def test_get_provider_by_slug_returns_public_provider(
