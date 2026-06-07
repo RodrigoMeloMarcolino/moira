@@ -24,11 +24,12 @@ class PublicAppointmentBookingCreate(BaseModel):
             return normalize_customer_phone(value)
         except CustomerPhoneInvalid as exc:
             raise ValueError(str(exc)) from exc
-        
+
+
 class AppointmentPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id : UUID
+    id: UUID
     provider_id: UUID
     offering_id: UUID
     customer_id: UUID

@@ -142,9 +142,7 @@ async def test_list_active_provider_offerings_returns_offerings() -> None:
     result = await use_case.execute("provider-test")
 
     providers.get_by_slug.assert_awaited_once_with("provider-test")
-    offerings.list_active_by_provider_id.assert_awaited_once_with(
-        existing_provider.id
-    )
+    offerings.list_active_by_provider_id.assert_awaited_once_with(existing_provider.id)
     assert result == [expected_offering]
 
 

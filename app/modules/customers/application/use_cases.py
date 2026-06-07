@@ -1,4 +1,3 @@
-
 from app.modules.customers.application.output_ports import CustomerRepository
 from app.modules.customers.infrastructure.models import Customer
 from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone

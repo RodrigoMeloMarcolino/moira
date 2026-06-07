@@ -10,10 +10,8 @@ class SQLAlchemyCustomerRepository:
 
     async def get_by_phone(self, phone: str) -> Customer | None:
         return await self.session.scalar(
-            select(Customer).where(
-                Customer.phone == phone
-            )
+            select(Customer).where(Customer.phone == phone)
         )
-    
+
     async def add(self, customer: Customer) -> None:
         self.session.add(customer)

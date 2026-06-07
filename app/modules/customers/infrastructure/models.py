@@ -10,9 +10,7 @@ from app.shared.infrastructure.mixins import TimestampMixin
 
 class Customer(Base, TimestampMixin):
     __tablename__ = "customers"
-    __table_args__ = (
-        UniqueConstraint("phone", name="uq_customers_phone"),
-    )
+    __table_args__ = (UniqueConstraint("phone", name="uq_customers_phone"),)
 
     id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),

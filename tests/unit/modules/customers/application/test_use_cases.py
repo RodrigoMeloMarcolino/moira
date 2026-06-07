@@ -13,44 +13,41 @@ from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone
 
 def get_or_create_customer_by_phone_payload() -> CustomerGetOrCreateByPhone:
     return CustomerGetOrCreateByPhone(
-        name="customer test",
-        phone="+5584981175566",
-        email="customer@test.com"
-    ) 
+        name="customer test", phone="+5584981175566", email="customer@test.com"
+    )
+
 
 def customer() -> Customer:
     return Customer(
         id=uuid4(),
         name="customer test",
         phone="+5584981175566",
-        email="customer@test.com"
+        email="customer@test.com",
     )
 
-def customer_repository_mock(
-        *,
-        customer_by_phone: Customer | None = None
-) -> Mock:
+
+def customer_repository_mock(*, customer_by_phone: Customer | None = None) -> Mock:
     customers = Mock(spec=CustomerRepository)
     customers.get_by_phone = AsyncMock(return_value=customer_by_phone)
     customers.add = AsyncMock()
 
     return customers
 
+
 def get_or_create_customer_by_phone_use_case(
-        *,
-        customers: Mock | None = None,
+    *,
+    customers: Mock | None = None,
 ) -> GetOrCreateCustomerByPhoneUseCase:
     return GetOrCreateCustomerByPhoneUseCase(
         customers=customers or customer_repository_mock()
     )
 
+
 @pytest.mark.asyncio
 async def test_get_or_create_customer_by_phone_return_exiting_customer() -> None:
     existing_customer = customer()
     customers = customer_repository_mock(customer_by_phone=existing_customer)
-    use_case = get_or_create_customer_by_phone_use_case(
-        customers=customers
-    )
+    use_case = get_or_create_customer_by_phone_use_case(customers=customers)
 
     result = await use_case.execute(payload=get_or_create_customer_by_phone_payload())
 
@@ -66,9 +63,7 @@ async def test_get_or_create_customer_by_phone_return_exiting_customer() -> None
 async def test_get_or_create_customer_by_phone_return_new_customer() -> None:
     payload = get_or_create_customer_by_phone_payload()
     customers = customer_repository_mock()
-    use_case = get_or_create_customer_by_phone_use_case(
-        customers=customers
-    )
+    use_case = get_or_create_customer_by_phone_use_case(customers=customers)
 
     result = await use_case.execute(payload=payload)
 

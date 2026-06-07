@@ -25,13 +25,13 @@ from app.shared.application.unit_of_work import UnitOfWork
 
 class BookPublicAppointmentUseCase:
     def __init__(
-            self,
-            appointments: AppointmentRepository,
-            offerings: OfferingRepository,
-            providers: ProviderRepository,
-            appointment_slots: AppointmentSlotRepository,
-            get_or_create_customer_by_phone: CustomerCreatorGetter,
-            uow: UnitOfWork
+        self,
+        appointments: AppointmentRepository,
+        offerings: OfferingRepository,
+        providers: ProviderRepository,
+        appointment_slots: AppointmentSlotRepository,
+        get_or_create_customer_by_phone: CustomerCreatorGetter,
+        uow: UnitOfWork,
     ) -> None:
         self.appointments = appointments
         self.offerings = offerings
@@ -41,27 +41,27 @@ class BookPublicAppointmentUseCase:
         self.uow = uow
 
     async def execute(
-            self,
-            provider_slug: str,
-            payload: PublicAppointmentBookingCreate,
+        self,
+        provider_slug: str,
+        payload: PublicAppointmentBookingCreate,
     ) -> Appointment:
         offering = await self.offerings.get_active_by_id(payload.offering_id)
         if offering is None:
             raise OfferingNotFound(
                 f"offering not found by offering_id {payload.offering_id}",
             )
-        
+
         provider_id = await self.providers.find_id_by_slug(provider_slug)
         if provider_id is None:
             raise ProviderNotFound(
                 f"provider_id not found by slug {provider_slug}",
             )
-        
+
         if provider_id != offering.provider_id:
             raise OfferingDoesNotBelongToProvider(
                 "the requested offering does not belong to this provider",
             )
-        
+
         start_at = payload.start_at.replace(second=0, microsecond=0)
 
         try:
@@ -73,7 +73,6 @@ class BookPublicAppointmentUseCase:
             raise InvalidAppointmentStart(str(exc)) from exc
 
         try:
-
             customer = await self.get_or_create_customer_by_phone.execute(
                 payload=CustomerGetOrCreateByPhone(
                     name=payload.customer_name,
@@ -103,7 +102,7 @@ class BookPublicAppointmentUseCase:
                 AppointmentSlot(
                     appointment_id=appointment.id,
                     provider_id=provider_id,
-                    slot_start_at=slot_start_at
+                    slot_start_at=slot_start_at,
                 )
                 for slot_start_at in slots_starts
             ]

@@ -82,9 +82,10 @@ def build_update_offering_use_case(session: SessionDep) -> UpdateOfferingUseCase
         unit_of_work=SqlAlchemyUnitOfWork(session),
     )
 
+
 def build_book_public_appointment_use_case(
-        session: SessionDep
-    ) -> BookPublicAppointmentUseCase:
+    session: SessionDep,
+) -> BookPublicAppointmentUseCase:
     get_or_create_customer_by_phone_use_case = GetOrCreateCustomerByPhoneUseCase(
         customers=SQLAlchemyCustomerRepository(session),
     )
@@ -95,8 +96,9 @@ def build_book_public_appointment_use_case(
         offerings=SqlAlchemyOfferingRepository(session),
         providers=SqlAlchemyProviderRepository(session),
         get_or_create_customer_by_phone=get_or_create_customer_by_phone_use_case,
-        uow=SqlAlchemyUnitOfWork(session)
+        uow=SqlAlchemyUnitOfWork(session),
     )
+
 
 SignupProviderUseCaseDep = Annotated[
     SignupProviderUseCase,
