@@ -9,7 +9,8 @@ def test_generate_provider_slug_normalizes_display_name() -> None:
     assert slug == "barbearia-joao-a1b2c3d4"
 
 
-def test_generate_provider_slug_falls_back_when_display_name_has_no_useful_chars() -> None:
+def test_generate_provider_slug_falls_back_when_display_name_has_no_useful_chars(
+) -> None:
     slug = generate_provider_slug("!!!", suffix="a1b2c3d4")
 
     assert slug == "provider-a1b2c3d4"

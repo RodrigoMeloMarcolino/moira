@@ -4,12 +4,12 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.modules.auth.domain.password_policy import SignupPasswordPolicyError
+from app.modules.providers.application import use_cases as provider_use_cases
 from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
     ProviderNotFound,
     ProviderSignupConflict,
 )
-from app.modules.providers.application import use_cases as provider_use_cases
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.modules.providers.application.use_cases import (
     GetProviderBySlugUseCase,
