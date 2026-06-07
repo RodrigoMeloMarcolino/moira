@@ -24,3 +24,11 @@ class SqlAlchemyOfferingRepository:
 
     async def add(self, offering: Offering) -> None:
         self.session.add(offering)
+
+    async def get_active_by_id(self, offering_id: UUID) -> Offering | None:
+        return await self.session.scalar(
+            select(Offering).where(
+                Offering.id == offering_id,
+                Offering.is_active.is_(True)
+            )
+        )
