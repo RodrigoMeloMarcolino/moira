@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from app.modules.appointments.application.exceptions import (
     AppointmentBookingConflict,
+    AppointmentStartUnavailable,
     InvalidAppointmentStart,
     OfferingDoesNotBelongToProvider,
 )
@@ -13,6 +14,9 @@ from app.modules.appointments.domain.exceptions import StartOutOfBoundary
 from app.modules.appointments.domain.slots import build_occupied_slot_starts
 from app.modules.appointments.infrastructure.models import Appointment, AppointmentSlot
 from app.modules.appointments.schemas.booking import PublicAppointmentBookingCreate
+from app.modules.availability.application.input_ports import (
+    ProviderAvailableSlotsRetriever,
+)
 from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone
 from app.modules.offerings.application.exceptions import OfferingNotFound
@@ -31,6 +35,7 @@ class BookPublicAppointmentUseCase:
         providers: ProviderRepository,
         appointment_slots: AppointmentSlotRepository,
         get_or_create_customer_by_phone: CustomerCreatorGetter,
+        list_provider_available_slots: ProviderAvailableSlotsRetriever,
         uow: UnitOfWork,
     ) -> None:
         self.appointments = appointments
@@ -38,6 +43,7 @@ class BookPublicAppointmentUseCase:
         self.providers = providers
         self.appointment_slots = appointment_slots
         self.get_or_create_customer_by_phone = get_or_create_customer_by_phone
+        self.list_provider_available_slots = list_provider_available_slots
         self.uow = uow
 
     async def execute(
@@ -71,6 +77,17 @@ class BookPublicAppointmentUseCase:
             )
         except StartOutOfBoundary as exc:
             raise InvalidAppointmentStart(str(exc)) from exc
+
+        available_starts = await self.list_provider_available_slots.execute(
+            provider_slug=provider_slug,
+            offering_id=payload.offering_id,
+            target_date=start_at.date(),
+        )
+
+        if start_at not in available_starts:
+            raise AppointmentStartUnavailable(
+                "appointment start_at is outside provider availability"
+            )
 
         try:
             customer = await self.get_or_create_customer_by_phone.execute(

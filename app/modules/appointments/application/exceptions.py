@@ -1,10 +1,18 @@
-class InvalidAppointmentStart(Exception):
+class AppointmentError(Exception):
     pass
 
 
-class OfferingDoesNotBelongToProvider(Exception):
+class InvalidAppointmentStart(AppointmentError):
     pass
 
 
-class AppointmentBookingConflict(Exception):
+class OfferingDoesNotBelongToProvider(AppointmentError):
+    pass
+
+
+class AppointmentBookingConflict(AppointmentError):
+    pass
+
+
+class AppointmentStartUnavailable(AppointmentError):
     pass

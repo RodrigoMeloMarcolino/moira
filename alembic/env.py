@@ -5,6 +5,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.modules.appointments.infrastructure.models  # noqa: F401
+import app.modules.availability.infrastructure.models  # noqa: F401
 import app.modules.customers.infrastructure.models  # noqa: F401
 import app.modules.offerings.infrastructure.models  # noqa: F401
 import app.modules.providers.infrastructure.models  # noqa: F401
