@@ -10,6 +10,14 @@ from app.modules.appointments.infrastructure.repositories import (
     SQLAlchemyAppointmentSlotRepository,
 )
 from app.modules.auth.infrastructure.passwords import BcryptPasswordHasher
+from app.modules.availability.application.use_cases import (
+    CreateAvailabilityRuleUseCase,
+    ListProviderAvailabilityRulesUseCase,
+    ListProviderAvailableSlotsUseCase,
+)
+from app.modules.availability.infrastructure.repositories import (
+    SQLAlchemyAvailabilityRulesRepository,
+)
 from app.modules.customers.application.use_cases import (
     GetOrCreateCustomerByPhoneUseCase,
 )
@@ -89,6 +97,12 @@ def build_book_public_appointment_use_case(
     get_or_create_customer_by_phone_use_case = GetOrCreateCustomerByPhoneUseCase(
         customers=SQLAlchemyCustomerRepository(session),
     )
+    list_provider_available_slots_use_case = ListProviderAvailableSlotsUseCase(
+        providers=SqlAlchemyProviderRepository(session),
+        appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
+        offerings=SqlAlchemyOfferingRepository(session),
+        rules=SQLAlchemyAvailabilityRulesRepository(session),
+    )
 
     return BookPublicAppointmentUseCase(
         appointments=SQLAlchemyAppointmentRepository(session),
@@ -96,7 +110,38 @@ def build_book_public_appointment_use_case(
         offerings=SqlAlchemyOfferingRepository(session),
         providers=SqlAlchemyProviderRepository(session),
         get_or_create_customer_by_phone=get_or_create_customer_by_phone_use_case,
+        list_provider_available_slots=list_provider_available_slots_use_case,
         uow=SqlAlchemyUnitOfWork(session),
+    )
+
+
+def build_create_provider_availability_use_case(
+    session: SessionDep,
+) -> CreateAvailabilityRuleUseCase:
+    return CreateAvailabilityRuleUseCase(
+        availability_rules=SQLAlchemyAvailabilityRulesRepository(session),
+        providers=SqlAlchemyProviderRepository(session),
+        uow=SqlAlchemyUnitOfWork(session),
+    )
+
+
+def build_list_provider_availability_rules_use_case(
+    session: SessionDep,
+) -> ListProviderAvailabilityRulesUseCase:
+    return ListProviderAvailabilityRulesUseCase(
+        availability_rules=SQLAlchemyAvailabilityRulesRepository(session),
+        providers=SqlAlchemyProviderRepository(session),
+    )
+
+
+def build_list_provider_available_slots_use_case(
+    session: SessionDep,
+) -> ListProviderAvailableSlotsUseCase:
+    return ListProviderAvailableSlotsUseCase(
+        appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
+        offerings=SqlAlchemyOfferingRepository(session),
+        providers=SqlAlchemyProviderRepository(session),
+        rules=SQLAlchemyAvailabilityRulesRepository(session),
     )
 
 
@@ -123,4 +168,16 @@ UpdateOfferingUseCaseDep = Annotated[
 BookPublicAppointmentUseCaseDep = Annotated[
     BookPublicAppointmentUseCase,
     Depends(build_book_public_appointment_use_case),
+]
+CreateAvailabilityRuleUseCaseDep = Annotated[
+    CreateAvailabilityRuleUseCase,
+    Depends(build_create_provider_availability_use_case),
+]
+ListProviderAvailabilityRulesUseCaseDep = Annotated[
+    ListProviderAvailabilityRulesUseCase,
+    Depends(build_list_provider_availability_rules_use_case),
+]
+ListProviderAvailableSlotsUseCaseDep = Annotated[
+    ListProviderAvailableSlotsUseCase,
+    Depends(build_list_provider_available_slots_use_case),
 ]

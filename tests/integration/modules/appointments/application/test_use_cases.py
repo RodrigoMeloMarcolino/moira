@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session_factory, engine
 from app.modules.appointments.application.exceptions import (
     AppointmentBookingConflict,
+    AppointmentStartUnavailable,
     InvalidAppointmentStart,
     OfferingDoesNotBelongToProvider,
 )
@@ -60,7 +61,34 @@ def unique_phone() -> str:
     return f"+1555{uuid4().int % 10_000_000_000:010d}"
 
 
-def build_use_case(session: AsyncSession) -> BookPublicAppointmentUseCase:
+class AvailableSlotsRetrieverStub:
+    def __init__(self, available_starts: list[datetime] | None = None) -> None:
+        self.available_starts = available_starts
+        self.calls: list[tuple[str, UUID, object]] = []
+
+    async def execute(
+        self,
+        provider_slug: str,
+        offering_id: UUID,
+        target_date: date,
+    ) -> list[datetime]:
+        self.calls.append((provider_slug, offering_id, target_date))
+
+        if self.available_starts is not None:
+            return self.available_starts
+
+        day_start = datetime.combine(target_date, time.min, tzinfo=UTC)
+        return [
+            day_start + timedelta(minutes=offset) for offset in range(0, 24 * 60, 15)
+        ]
+
+
+def build_use_case(
+    session: AsyncSession,
+    *,
+    available_slots: AvailableSlotsRetrieverStub | None = None,
+) -> BookPublicAppointmentUseCase:
+    available_slots_retriever = available_slots or AvailableSlotsRetrieverStub()
     get_or_create_customer_by_phone = GetOrCreateCustomerByPhoneUseCase(
         customers=SQLAlchemyCustomerRepository(session),
     )
@@ -71,6 +99,7 @@ def build_use_case(session: AsyncSession) -> BookPublicAppointmentUseCase:
         offerings=SqlAlchemyOfferingRepository(session),
         providers=SqlAlchemyProviderRepository(session),
         get_or_create_customer_by_phone=get_or_create_customer_by_phone,
+        list_provider_available_slots=available_slots_retriever,
         uow=SqlAlchemyUnitOfWork(session),
     )
 
@@ -377,6 +406,32 @@ async def test_book_public_appointment_raises_when_start_is_out_of_boundary() ->
 
         with pytest.raises(InvalidAppointmentStart):
             await build_use_case(session).execute(provider.slug, payload)
+
+    async with async_session_factory() as session:
+        assert await count_customers_by_phone(session, customer_phone) == 0
+        assert await count_appointments_by_offering(session, offering.id) == 0
+
+
+async def test_book_public_appointment_raises_when_start_is_unavailable() -> None:
+    customer_phone = unique_phone()
+    start_at = datetime(2026, 6, 10, 15, 0, tzinfo=UTC)
+    available_slots = AvailableSlotsRetrieverStub(available_starts=[])
+
+    async with async_session_factory() as session:
+        provider, offering = await create_provider_with_offering(session)
+        payload = booking_payload(
+            offering.id,
+            start_at=start_at,
+            customer_phone=customer_phone,
+        )
+
+        with pytest.raises(AppointmentStartUnavailable):
+            await build_use_case(
+                session,
+                available_slots=available_slots,
+            ).execute(provider.slug, payload)
+
+    assert available_slots.calls == [(provider.slug, offering.id, start_at.date())]
 
     async with async_session_factory() as session:
         assert await count_customers_by_phone(session, customer_phone) == 0

@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.deps import BookPublicAppointmentUseCaseDep
 from app.modules.appointments.application.exceptions import (
     AppointmentBookingConflict,
+    AppointmentStartUnavailable,
     InvalidAppointmentStart,
     OfferingDoesNotBelongToProvider,
 )
@@ -48,4 +49,9 @@ async def book_public_appointment(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="this time slot isn`t available anymore",
+        ) from exc
+    except AppointmentStartUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="appointment start_at is outside provider availability",
         ) from exc
