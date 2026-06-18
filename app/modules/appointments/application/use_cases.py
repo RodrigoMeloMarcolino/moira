@@ -54,18 +54,18 @@ class BookPublicAppointmentUseCase:
         offering = await self.offerings.get_active_by_id(payload.offering_id)
         if offering is None:
             raise OfferingNotFound(
-                f"offering not found by offering_id {payload.offering_id}",
+                f'offering not found by offering_id {payload.offering_id}',
             )
 
         provider_id = await self.providers.find_id_by_slug(provider_slug)
         if provider_id is None:
             raise ProviderNotFound(
-                f"provider_id not found by slug {provider_slug}",
+                f'provider_id not found by slug {provider_slug}',
             )
 
         if provider_id != offering.provider_id:
             raise OfferingDoesNotBelongToProvider(
-                "the requested offering does not belong to this provider",
+                'the requested offering does not belong to this provider',
             )
 
         start_at = payload.start_at.replace(second=0, microsecond=0)
@@ -86,7 +86,7 @@ class BookPublicAppointmentUseCase:
 
         if start_at not in available_starts:
             raise AppointmentStartUnavailable(
-                "appointment start_at is outside provider availability"
+                'appointment start_at is outside provider availability'
             )
 
         try:
@@ -108,7 +108,7 @@ class BookPublicAppointmentUseCase:
                 start_at=start_at,
                 end_at=end_at,
                 duration_minutes_snapshot=offering.duration_minutes,
-                status="scheduled",
+                status='scheduled',
                 customer_notes=payload.customer_notes,
             )
 
@@ -132,5 +132,5 @@ class BookPublicAppointmentUseCase:
         except UnitOfWorkConflict as exc:
             await self.uow.rollback()
             raise AppointmentBookingConflict(
-                "appointment time is no longer available"
+                'appointment time is no longer available'
             ) from exc

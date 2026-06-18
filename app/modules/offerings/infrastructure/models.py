@@ -9,15 +9,15 @@ from app.shared.infrastructure.mixins import TimestampMixin
 
 
 class Offering(Base, TimestampMixin):
-    __tablename__ = "offerings"
+    __tablename__ = 'offerings'
     __table_args__ = (
-        CheckConstraint("duration_minutes > 0", name="ck_offerings_duration_positive"),
+        CheckConstraint('duration_minutes > 0', name='ck_offerings_duration_positive'),
         CheckConstraint(
-            "duration_minutes % 15 = 0", name="ck_offerings_duration_multiple_of_15"
+            'duration_minutes % 15 = 0', name='ck_offerings_duration_multiple_of_15'
         ),
         CheckConstraint(
-            "price_cents IS NULL OR price_cents >= 0",
-            name="ck_offerings_price_cents_non_negatives",
+            'price_cents IS NULL OR price_cents >= 0',
+            name='ck_offerings_price_cents_non_negatives',
         ),
     )
 
@@ -29,7 +29,7 @@ class Offering(Base, TimestampMixin):
 
     provider_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("providers.id"),
+        ForeignKey('providers.id'),
         nullable=False,
     )
 

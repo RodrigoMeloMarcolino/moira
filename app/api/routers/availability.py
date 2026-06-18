@@ -20,11 +20,11 @@ from app.modules.availability.schemas.availability_rules import (
 from app.modules.offerings.application.exceptions import OfferingNotFound
 from app.modules.providers.application.exceptions import ProviderNotFound
 
-availability_router = APIRouter(tags=["availability"])
+availability_router = APIRouter(tags=['availability'])
 
 
 @availability_router.post(
-    "/providers/{provider_id}/availability-rules",
+    '/providers/{provider_id}/availability-rules',
     response_model=AvailabilityRulePublic,
     status_code=status.HTTP_201_CREATED,
 )
@@ -38,12 +38,12 @@ async def create_provider_availability(
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="provider not found",
+            detail='provider not found',
         ) from exc
 
 
 @availability_router.get(
-    "/providers/{provider_id}/availability-rules",
+    '/providers/{provider_id}/availability-rules',
     response_model=list[AvailabilityRulePublic],
     status_code=status.HTTP_200_OK,
 )
@@ -56,19 +56,19 @@ async def list_provider_availability_rules(
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="provider not found",
+            detail='provider not found',
         ) from exc
 
 
 @availability_router.get(
-    "/providers/{provider_slug}/available-slots",
+    '/providers/{provider_slug}/available-slots',
     response_model=list[datetime],
 )
 async def list_provider_available_slots(
     provider_slug: str,
     use_case: ListProviderAvailableSlotsUseCaseDep,
     offering_id: Annotated[UUID, Query()],
-    target_date: Annotated[date, Query(alias="date")],
+    target_date: Annotated[date, Query(alias='date')],
 ) -> list[datetime]:
     try:
         return await use_case.execute(
@@ -79,15 +79,15 @@ async def list_provider_available_slots(
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="provider not found",
+            detail='provider not found',
         ) from exc
     except OfferingNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="offering not found",
+            detail='offering not found',
         ) from exc
     except OfferingDoesNotBelongToProvider as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="offering does not belong to provider",
+            detail='offering does not belong to provider',
         ) from exc

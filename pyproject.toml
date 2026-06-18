@@ -27,6 +27,9 @@ dev = [
 line-length = 88
 target-version = "py312"
 
+[tool.ruff.format]
+quote-style = "single"
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = []

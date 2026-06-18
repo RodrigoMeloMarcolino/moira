@@ -11,11 +11,11 @@ def validate_signup_password(password: str) -> None:
 
     if password_length < MIN_SIGNUP_PASSWORD_LENGTH:
         raise SignupPasswordPolicyError(
-            "signup password must have at least "
-            f"{MIN_SIGNUP_PASSWORD_LENGTH} characters"
+            'signup password must have at least '
+            f'{MIN_SIGNUP_PASSWORD_LENGTH} characters'
         )
 
     if password_length > MAX_SIGNUP_PASSWORD_LENGTH:
         raise SignupPasswordPolicyError(
-            f"signup password must have at most {MAX_SIGNUP_PASSWORD_LENGTH} characters"
+            f'signup password must have at most {MAX_SIGNUP_PASSWORD_LENGTH} characters'
         )

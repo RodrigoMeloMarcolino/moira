@@ -24,19 +24,19 @@ from app.shared.application.exceptions import UnitOfWorkConflict
 from app.shared.application.unit_of_work import UnitOfWork
 
 
-def provider_signup_payload(password: str = "secure-password") -> ProviderSignupCreate:
+def provider_signup_payload(password: str = 'secure-password') -> ProviderSignupCreate:
     return ProviderSignupCreate(
-        email="provider@example.com",
+        email='provider@example.com',
         password=password,
-        display_name="Provider Test",
+        display_name='Provider Test',
     )
 
 
 def user() -> User:
     return User(
         id=uuid4(),
-        email="provider@example.com",
-        password_hash="hashed:secure-password",
+        email='provider@example.com',
+        password_hash='hashed:secure-password',
     )
 
 
@@ -101,10 +101,10 @@ async def test_signup_provider_creates_user_and_provider(
         unit_of_work=unit_of_work,
     )
 
-    slug = "provider-test-a1b2c3d4"
+    slug = 'provider-test-a1b2c3d4'
     monkeypatch.setattr(
         provider_use_cases,
-        "generate_provider_slug",
+        'generate_provider_slug',
         lambda display_name: slug,
     )
 
@@ -112,8 +112,8 @@ async def test_signup_provider_creates_user_and_provider(
 
     providers.find_id_by_slug.assert_awaited_once_with(slug)
     create_user.execute.assert_awaited_once_with(
-        email="provider@example.com",
-        password="secure-password",
+        email='provider@example.com',
+        password='secure-password',
     )
     unit_of_work.flush.assert_awaited_once_with()
     providers.add.assert_awaited_once_with(provider)
@@ -122,10 +122,10 @@ async def test_signup_provider_creates_user_and_provider(
     unit_of_work.rollback.assert_not_awaited()
 
     assert provider.user_id == created_user.id
-    assert provider.display_name == "Provider Test"
+    assert provider.display_name == 'Provider Test'
     assert provider.slug == slug
-    assert provider.timezone == "America/Fortaleza"
-    assert provider.currency_code == "BRL"
+    assert provider.timezone == 'America/Fortaleza'
+    assert provider.currency_code == 'BRL'
 
 
 @pytest.mark.asyncio
@@ -139,11 +139,11 @@ async def test_signup_provider_rejects_invalid_password_before_repositories() ->
         unit_of_work=unit_of_work,
     )
     payload = ProviderSignupCreate.model_construct(
-        email="provider@example.com",
-        password="a" * 7,
-        display_name="Provider Test",
-        timezone="America/Fortaleza",
-        currency_code="BRL",
+        email='provider@example.com',
+        password='a' * 7,
+        display_name='Provider Test',
+        timezone='America/Fortaleza',
+        currency_code='BRL',
     )
 
     with pytest.raises(SignupPasswordPolicyError):
@@ -166,17 +166,17 @@ async def test_signup_provider_rejects_duplicate_email(
 
     monkeypatch.setattr(
         provider_use_cases,
-        "generate_provider_slug",
-        lambda display_name: "provider-test-a1b2c3d4",
+        'generate_provider_slug',
+        lambda display_name: 'provider-test-a1b2c3d4',
     )
 
     with pytest.raises(ProviderEmailAlreadyExists):
         await use_case.execute(provider_signup_payload())
 
-    providers.find_id_by_slug.assert_awaited_once_with("provider-test-a1b2c3d4")
+    providers.find_id_by_slug.assert_awaited_once_with('provider-test-a1b2c3d4')
     create_user.execute.assert_awaited_once_with(
-        email="provider@example.com",
-        password="secure-password",
+        email='provider@example.com',
+        password='secure-password',
     )
     providers.add.assert_not_awaited()
 
@@ -195,16 +195,16 @@ async def test_signup_provider_retries_when_slug_exists(
         unit_of_work=unit_of_work,
     )
 
-    slugs = iter(["provider-test-a1b2c3d4", "provider-test-b5c6d7e8"])
+    slugs = iter(['provider-test-a1b2c3d4', 'provider-test-b5c6d7e8'])
     monkeypatch.setattr(
         provider_use_cases,
-        "generate_provider_slug",
+        'generate_provider_slug',
         lambda display_name: next(slugs),
     )
 
     provider = await use_case.execute(provider_signup_payload())
 
-    assert provider.slug == "provider-test-b5c6d7e8"
+    assert provider.slug == 'provider-test-b5c6d7e8'
     assert providers.find_id_by_slug.await_count == 2
     assert create_user.execute.await_count == 1
     assert providers.add.await_count == 1
@@ -221,8 +221,8 @@ async def test_signup_provider_rolls_back_on_unit_of_work_conflict(
 
     monkeypatch.setattr(
         provider_use_cases,
-        "generate_provider_slug",
-        lambda display_name: "provider-test-a1b2c3d4",
+        'generate_provider_slug',
+        lambda display_name: 'provider-test-a1b2c3d4',
     )
 
     with pytest.raises(ProviderSignupConflict):
@@ -247,16 +247,16 @@ async def test_signup_provider_retries_after_slug_conflict_on_commit(
         unit_of_work=unit_of_work,
     )
 
-    slugs = iter(["provider-test-a1b2c3d4", "provider-test-b5c6d7e8"])
+    slugs = iter(['provider-test-a1b2c3d4', 'provider-test-b5c6d7e8'])
     monkeypatch.setattr(
         provider_use_cases,
-        "generate_provider_slug",
+        'generate_provider_slug',
         lambda display_name: next(slugs),
     )
 
     provider = await use_case.execute(provider_signup_payload())
 
-    assert provider.slug == "provider-test-b5c6d7e8"
+    assert provider.slug == 'provider-test-b5c6d7e8'
     assert create_user.execute.await_count == 2
     assert providers.add.await_count == 2
     assert unit_of_work.commit.await_count == 2
@@ -268,17 +268,17 @@ async def test_get_provider_by_slug_returns_provider() -> None:
     expected_provider = Provider(
         id=uuid4(),
         user_id=uuid4(),
-        display_name="Provider Test",
-        slug="provider-test",
-        timezone="America/Fortaleza",
-        currency_code="BRL",
+        display_name='Provider Test',
+        slug='provider-test',
+        timezone='America/Fortaleza',
+        currency_code='BRL',
     )
     providers = provider_repository_mock(provider_by_slug=expected_provider)
     use_case = GetProviderBySlugUseCase(providers=providers)
 
-    provider = await use_case.execute("provider-test")
+    provider = await use_case.execute('provider-test')
 
-    providers.get_by_slug.assert_awaited_once_with("provider-test")
+    providers.get_by_slug.assert_awaited_once_with('provider-test')
     assert provider is expected_provider
 
 
@@ -288,6 +288,6 @@ async def test_get_provider_by_slug_raises_when_missing() -> None:
     use_case = GetProviderBySlugUseCase(providers=providers)
 
     with pytest.raises(ProviderNotFound):
-        await use_case.execute("missing-provider")
+        await use_case.execute('missing-provider')
 
-    providers.get_by_slug.assert_awaited_once_with("missing-provider")
+    providers.get_by_slug.assert_awaited_once_with('missing-provider')

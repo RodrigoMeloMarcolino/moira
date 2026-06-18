@@ -34,7 +34,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 async def check_database_ready() -> bool:
     try:
         async with engine.connect() as connection:
-            await connection.execute(text("SELECT 1"))
+            await connection.execute(text('SELECT 1'))
     except Exception:
         return False
 

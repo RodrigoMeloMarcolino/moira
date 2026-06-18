@@ -9,7 +9,7 @@ from app.modules.auth.domain.password_policy import (
 
 
 class ProviderSignupCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(
@@ -17,15 +17,15 @@ class ProviderSignupCreate(BaseModel):
         max_length=MAX_SIGNUP_PASSWORD_LENGTH,
     )
     display_name: str = Field(min_length=1, max_length=120)
-    timezone: str = Field(default="America/Fortaleza", min_length=1, max_length=64)
-    currency_code: str = Field(default="BRL", min_length=3, max_length=3)
+    timezone: str = Field(default='America/Fortaleza', min_length=1, max_length=64)
+    currency_code: str = Field(default='BRL', min_length=3, max_length=3)
 
-    @field_validator("display_name")
+    @field_validator('display_name')
     @classmethod
     def normalize_display_name(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
-            msg = "display_name must not be empty"
+            msg = 'display_name must not be empty'
             raise ValueError(msg)
 
         return normalized

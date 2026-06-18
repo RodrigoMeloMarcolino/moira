@@ -9,7 +9,7 @@ from app.shared.infrastructure.mixins import TimestampMixin
 
 
 class Provider(Base, TimestampMixin):
-    __tablename__ = "providers"
+    __tablename__ = 'providers'
 
     id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
@@ -19,7 +19,7 @@ class Provider(Base, TimestampMixin):
 
     user_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("users.id"),
+        ForeignKey('users.id'),
         nullable=False,
     )
 
@@ -35,12 +35,12 @@ class Provider(Base, TimestampMixin):
     )
 
     timezone: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="America/Fortaleza"
+        String(64), nullable=False, default='America/Fortaleza'
     )
 
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="BRL",
-        server_default="BRL",
+        default='BRL',
+        server_default='BRL',
     )

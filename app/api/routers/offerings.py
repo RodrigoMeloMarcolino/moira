@@ -16,11 +16,11 @@ from app.modules.offerings.schemas.catalog import (
 )
 from app.modules.providers.application.exceptions import ProviderNotFound
 
-offerings_router = APIRouter(tags=["offerings"])
+offerings_router = APIRouter(tags=['offerings'])
 
 
 @offerings_router.post(
-    "/providers/{provider_id}/offerings",
+    '/providers/{provider_id}/offerings',
     response_model=OfferingPublic,
     status_code=status.HTTP_201_CREATED,
 )
@@ -34,12 +34,12 @@ async def create_offering(
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="provider not found",
+            detail='provider not found',
         ) from exc
 
 
 @offerings_router.get(
-    "/providers/{slug}/offerings",
+    '/providers/{slug}/offerings',
     response_model=list[OfferingPublic],
 )
 async def list_active_provider_offerings(
@@ -51,12 +51,12 @@ async def list_active_provider_offerings(
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="provider not found",
+            detail='provider not found',
         ) from exc
 
 
 @offerings_router.patch(
-    "/offerings/{offering_id}",
+    '/offerings/{offering_id}',
     response_model=OfferingPublic,
 )
 async def update_offering(
@@ -69,5 +69,5 @@ async def update_offering(
     except OfferingNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="offering not found",
+            detail='offering not found',
         ) from exc
