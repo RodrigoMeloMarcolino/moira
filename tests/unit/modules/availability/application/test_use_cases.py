@@ -35,10 +35,10 @@ def provider() -> Provider:
     return Provider(
         id=uuid4(),
         user_id=uuid4(),
-        display_name="Provider Test",
-        slug="provider-test",
-        timezone="America/Fortaleza",
-        currency_code="BRL",
+        display_name='Provider Test',
+        slug='provider-test',
+        timezone='America/Fortaleza',
+        currency_code='BRL',
     )
 
 
@@ -46,8 +46,8 @@ def offering(provider_id: UUID, *, duration_minutes: int = 60) -> Offering:
     return Offering(
         id=uuid4(),
         provider_id=provider_id,
-        title="Consulta",
-        description="Atendimento inicial",
+        title='Consulta',
+        description='Atendimento inicial',
         duration_minutes=duration_minutes,
         price_cents=15000,
         is_active=True,
@@ -379,7 +379,7 @@ async def test_list_provider_available_slots_raises_when_provider_is_missing() -
 
     with pytest.raises(ProviderNotFound):
         await use_case.execute(
-            provider_slug="missing-provider",
+            provider_slug='missing-provider',
             offering_id=uuid4(),
             target_date=date(2026, 6, 10),
         )

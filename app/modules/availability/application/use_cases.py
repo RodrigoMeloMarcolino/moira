@@ -41,7 +41,7 @@ class CreateAvailabilityRuleUseCase:
     ) -> AvailabilityRule:
         provider = await self.providers.get_by_id(provider_id)
         if provider is None:
-            raise ProviderNotFound(f"provider not found by provider_id {provider_id}")
+            raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
 
         rule = AvailabilityRule(provider_id=provider_id, **payload.model_dump())
         await self.availability_rules.add(rule)
@@ -63,7 +63,7 @@ class ListProviderAvailabilityRulesUseCase:
     async def execute(self, provider_id: UUID) -> list[AvailabilityRule]:
         provider = await self.providers.get_by_id(provider_id)
         if provider is None:
-            raise ProviderNotFound(f"provider not found by provider_id {provider_id}")
+            raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
 
         return await self.availability_rules.list_by_provider(provider_id)
 
@@ -84,7 +84,7 @@ class UpdateProviderAvailabilityRuleUseCase:
     ) -> AvailabilityRule:
         rule = await self.availability_rules.get_by_id(rule_id)
         if rule is None:
-            raise AvailabilityNotFound(f"availability not found by rule_id {rule_id}")
+            raise AvailabilityNotFound(f'availability not found by rule_id {rule_id}')
 
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(rule, field, value)
@@ -117,16 +117,16 @@ class ListProviderAvailableSlotsUseCase:
         provider = await self.providers.get_by_slug(provider_slug)
         if provider is None:
             raise ProviderNotFound(
-                f"provider_id not found by provider_slug {provider_slug}"
+                f'provider_id not found by provider_slug {provider_slug}'
             )
 
         offering = await self.offerings.get_active_by_id(offering_id)
         if offering is None:
-            raise OfferingNotFound(f"offering not found by offering_id {offering_id}")
+            raise OfferingNotFound(f'offering not found by offering_id {offering_id}')
 
         if provider.id != offering.provider_id:
             raise OfferingDoesNotBelongToProvider(
-                "the requested offering does not belong to this provider"
+                'the requested offering does not belong to this provider'
             )
 
         weekday = target_date.isoweekday()

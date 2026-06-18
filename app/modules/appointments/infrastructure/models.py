@@ -18,16 +18,16 @@ from app.shared.infrastructure.mixins import TimestampMixin
 
 
 class Appointment(Base, TimestampMixin):
-    __tablename__ = "appointments"
+    __tablename__ = 'appointments'
     __table_args__ = (
-        CheckConstraint("start_at < end_at", name="ck_appointments_start_before_end"),
+        CheckConstraint('start_at < end_at', name='ck_appointments_start_before_end'),
         CheckConstraint(
-            "duration_minutes_snapshot > 0",
-            name="ck_appointment_duration_snapshot_positive",
+            'duration_minutes_snapshot > 0',
+            name='ck_appointment_duration_snapshot_positive',
         ),
         CheckConstraint(
-            "duration_minutes_snapshot % 15 = 0",
-            name="ck_appointment_duration_snapshot_multiple_of_15",
+            'duration_minutes_snapshot % 15 = 0',
+            name='ck_appointment_duration_snapshot_multiple_of_15',
         ),
     )
 
@@ -39,24 +39,24 @@ class Appointment(Base, TimestampMixin):
 
     provider_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("providers.id"),
+        ForeignKey('providers.id'),
         nullable=False,
     )
 
     offering_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("offerings.id"),
+        ForeignKey('offerings.id'),
         nullable=False,
     )
 
     customer_id: Mapped[UUID] = mapped_column(
-        pgUUID(as_uuid=True), ForeignKey("customers.id"), nullable=False
+        pgUUID(as_uuid=True), ForeignKey('customers.id'), nullable=False
     )
 
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration_minutes_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="scheduled")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default='scheduled')
     customer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     cancel_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reschedule_token_hash: Mapped[str | None] = mapped_column(
@@ -66,12 +66,12 @@ class Appointment(Base, TimestampMixin):
 
 
 class AppointmentSlot(Base):
-    __tablename__ = "appointment_slots"
+    __tablename__ = 'appointment_slots'
     __table_args__ = (
         UniqueConstraint(
-            "provider_id",
-            "slot_start_at",
-            name="uq_appointment_slots_provider_slot_start",
+            'provider_id',
+            'slot_start_at',
+            name='uq_appointment_slots_provider_slot_start',
         ),
     )
 
@@ -83,13 +83,13 @@ class AppointmentSlot(Base):
 
     appointment_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("appointments.id"),
+        ForeignKey('appointments.id'),
         nullable=False,
     )
 
     provider_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("providers.id"),
+        ForeignKey('providers.id'),
         nullable=False,
     )
 

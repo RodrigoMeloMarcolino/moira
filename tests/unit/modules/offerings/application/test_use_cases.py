@@ -22,10 +22,10 @@ def provider() -> Provider:
     return Provider(
         id=uuid4(),
         user_id=uuid4(),
-        display_name="Provider Test",
-        slug="provider-test",
-        timezone="America/Fortaleza",
-        currency_code="BRL",
+        display_name='Provider Test',
+        slug='provider-test',
+        timezone='America/Fortaleza',
+        currency_code='BRL',
     )
 
 
@@ -33,8 +33,8 @@ def offering(provider_id: UUID) -> Offering:
     return Offering(
         id=uuid4(),
         provider_id=provider_id,
-        title="Consulta",
-        description="Atendimento inicial",
+        title='Consulta',
+        description='Atendimento inicial',
         duration_minutes=30,
         price_cents=15000,
         is_active=True,
@@ -86,8 +86,8 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
         unit_of_work=unit_of_work,
     )
     payload = OfferingCreate(
-        title="Consulta",
-        description="Atendimento inicial",
+        title='Consulta',
+        description='Atendimento inicial',
         duration_minutes=30,
         price_cents=15000,
     )
@@ -99,8 +99,8 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
     unit_of_work.commit.assert_awaited_once_with()
     unit_of_work.refresh.assert_awaited_once_with(created)
     assert created.provider_id == existing_provider.id
-    assert created.title == "Consulta"
-    assert created.description == "Atendimento inicial"
+    assert created.title == 'Consulta'
+    assert created.description == 'Atendimento inicial'
     assert created.duration_minutes == 30
     assert created.price_cents == 15000
     assert created.is_active is True
@@ -117,7 +117,7 @@ async def test_create_offering_raises_when_provider_is_missing() -> None:
         offerings=offerings,
         unit_of_work=unit_of_work,
     )
-    payload = OfferingCreate(title="Consulta", duration_minutes=30)
+    payload = OfferingCreate(title='Consulta', duration_minutes=30)
 
     with pytest.raises(ProviderNotFound):
         await use_case.execute(missing_provider_id, payload)
@@ -139,9 +139,9 @@ async def test_list_active_provider_offerings_returns_offerings() -> None:
         offerings=offerings,
     )
 
-    result = await use_case.execute("provider-test")
+    result = await use_case.execute('provider-test')
 
-    providers.get_by_slug.assert_awaited_once_with("provider-test")
+    providers.get_by_slug.assert_awaited_once_with('provider-test')
     offerings.list_active_by_provider_id.assert_awaited_once_with(existing_provider.id)
     assert result == [expected_offering]
 
@@ -156,9 +156,9 @@ async def test_list_active_provider_offerings_raises_when_provider_is_missing() 
     )
 
     with pytest.raises(ProviderNotFound):
-        await use_case.execute("missing-provider")
+        await use_case.execute('missing-provider')
 
-    providers.get_by_slug.assert_awaited_once_with("missing-provider")
+    providers.get_by_slug.assert_awaited_once_with('missing-provider')
     offerings.list_active_by_provider_id.assert_not_awaited()
 
 
@@ -171,7 +171,7 @@ async def test_update_offering_updates_only_sent_fields() -> None:
         offerings=offerings,
         unit_of_work=unit_of_work,
     )
-    payload = OfferingUpdate(title="Consulta atualizada", is_active=False)
+    payload = OfferingUpdate(title='Consulta atualizada', is_active=False)
 
     updated = await use_case.execute(existing_offering.id, payload)
 
@@ -179,9 +179,9 @@ async def test_update_offering_updates_only_sent_fields() -> None:
     unit_of_work.commit.assert_awaited_once_with()
     unit_of_work.refresh.assert_awaited_once_with(updated)
     assert updated is existing_offering
-    assert updated.title == "Consulta atualizada"
+    assert updated.title == 'Consulta atualizada'
     assert updated.is_active is False
-    assert updated.description == "Atendimento inicial"
+    assert updated.description == 'Atendimento inicial'
     assert updated.duration_minutes == 30
     assert updated.price_cents == 15000
 
@@ -195,7 +195,7 @@ async def test_update_offering_raises_when_offering_is_missing() -> None:
         offerings=offerings,
         unit_of_work=unit_of_work,
     )
-    payload = OfferingUpdate(title="Consulta atualizada")
+    payload = OfferingUpdate(title='Consulta atualizada')
 
     with pytest.raises(OfferingNotFound):
         await use_case.execute(missing_offering_id, payload)

@@ -10,20 +10,20 @@ from app.shared.infrastructure.mixins import TimestampMixin
 
 
 class AvailabilityRule(Base, TimestampMixin):
-    __tablename__ = "availability_rules"
+    __tablename__ = 'availability_rules'
     __table_args__ = (
         CheckConstraint(
-            "weekday >= 1 AND weekday <= 7",
-            name="ck_weekday_valid_range",
+            'weekday >= 1 AND weekday <= 7',
+            name='ck_weekday_valid_range',
         ),
         CheckConstraint(
-            "start_time < end_time",
-            name="ck_start_before_end",
+            'start_time < end_time',
+            name='ck_start_before_end',
         ),
         Index(
-            "idx_availability_rules_provider_id_weekday",
-            "provider_id",
-            "weekday",
+            'idx_availability_rules_provider_id_weekday',
+            'provider_id',
+            'weekday',
         ),
     )
 
@@ -35,7 +35,7 @@ class AvailabilityRule(Base, TimestampMixin):
 
     provider_id: Mapped[UUID] = mapped_column(
         pgUUID(as_uuid=True),
-        ForeignKey("providers.id"),
+        ForeignKey('providers.id'),
         nullable=False,
     )
 
@@ -55,5 +55,5 @@ class AvailabilityRule(Base, TimestampMixin):
         Boolean,
         nullable=False,
         default=True,
-        server_default="true",
+        server_default='true',
     )

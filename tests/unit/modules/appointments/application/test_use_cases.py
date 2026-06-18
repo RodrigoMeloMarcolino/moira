@@ -30,8 +30,8 @@ def offering(provider_id: UUID, *, duration_minutes: int = 30) -> Offering:
     return Offering(
         id=uuid4(),
         provider_id=provider_id,
-        title="Consulta",
-        description="Atendimento inicial",
+        title='Consulta',
+        description='Atendimento inicial',
         duration_minutes=duration_minutes,
         price_cents=15000,
         is_active=True,
@@ -41,10 +41,10 @@ def offering(provider_id: UUID, *, duration_minutes: int = 30) -> Offering:
 def customer() -> Customer:
     return Customer(
         id=uuid4(),
-        name="Customer Test",
-        phone="+155500000000",
+        name='Customer Test',
+        phone='+155500000000',
         confirmed_phone=True,
-        email="customer@example.com",
+        email='customer@example.com',
     )
 
 
@@ -56,10 +56,10 @@ def booking_payload(
     return PublicAppointmentBookingCreate(
         offering_id=offering_id,
         start_at=start_at,
-        customer_name="Customer Test",
-        customer_phone="+155500000000",
-        customer_email="customer@example.com",
-        customer_notes="Please call before the appointment.",
+        customer_name='Customer Test',
+        customer_phone='+155500000000',
+        customer_email='customer@example.com',
+        customer_notes='Please call before the appointment.',
     )
 
 
@@ -164,10 +164,10 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
     )
     payload = booking_payload(existing_offering.id, start_at=start_at)
 
-    appointment = await use_case.execute("provider-test", payload)
+    appointment = await use_case.execute('provider-test', payload)
 
     available_slots.execute.assert_awaited_once_with(
-        provider_slug="provider-test",
+        provider_slug='provider-test',
         offering_id=existing_offering.id,
         target_date=expected_start_at.date(),
     )
@@ -182,8 +182,8 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
     assert appointment.start_at == expected_start_at
     assert appointment.end_at == expected_start_at + timedelta(minutes=30)
     assert appointment.duration_minutes_snapshot == 30
-    assert appointment.status == "scheduled"
-    assert appointment.customer_notes == "Please call before the appointment."
+    assert appointment.status == 'scheduled'
+    assert appointment.customer_notes == 'Please call before the appointment.'
 
     added_slots = appointment_slots.add_many.await_args.args[0]
     assert all(isinstance(slot, AppointmentSlot) for slot in added_slots)
@@ -217,7 +217,7 @@ async def test_book_public_appointment_raises_when_start_is_unavailable() -> Non
 
     with pytest.raises(AppointmentStartUnavailable):
         await use_case.execute(
-            "provider-test",
+            'provider-test',
             booking_payload(existing_offering.id, start_at=start_at),
         )
 
@@ -246,7 +246,7 @@ async def test_book_public_appointment_rejects_unaligned_start_first() -> None:
 
     with pytest.raises(InvalidAppointmentStart):
         await use_case.execute(
-            "provider-test",
+            'provider-test',
             booking_payload(
                 existing_offering.id,
                 start_at=datetime(2026, 6, 10, 9, 10),

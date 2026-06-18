@@ -5,10 +5,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 def validate_duration(value: int) -> int:
     if value <= 0:
-        raise ValueError("duration_minutes must be greater than 0")
+        raise ValueError('duration_minutes must be greater than 0')
 
     if value % 15 != 0:
-        raise ValueError("duration_minutes must be a multiple of 15")
+        raise ValueError('duration_minutes must be a multiple of 15')
 
     return value
 
@@ -20,7 +20,7 @@ class OfferingCreate(BaseModel):
     price_cents: int | None = Field(default=None, ge=0)
     is_active: bool = True
 
-    @field_validator("duration_minutes")
+    @field_validator('duration_minutes')
     @classmethod
     def validate_duration_minutes(cls, value: int) -> int:
         return validate_duration(value)
@@ -33,7 +33,7 @@ class OfferingUpdate(BaseModel):
     price_cents: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
 
-    @field_validator("duration_minutes")
+    @field_validator('duration_minutes')
     @classmethod
     def validate_duration_minutes(cls, value: int | None) -> int | None:
         if value is None:

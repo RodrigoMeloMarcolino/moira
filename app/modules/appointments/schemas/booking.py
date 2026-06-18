@@ -17,7 +17,7 @@ class PublicAppointmentBookingCreate(BaseModel):
     customer_email: str | None = Field(default=None, min_length=3, max_length=255)
     customer_notes: str | None = None
 
-    @field_validator("customer_phone")
+    @field_validator('customer_phone')
     @classmethod
     def validate_customer_phone(cls, value: str) -> str:
         try:

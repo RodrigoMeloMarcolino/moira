@@ -13,16 +13,16 @@ from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone
 
 def get_or_create_customer_by_phone_payload() -> CustomerGetOrCreateByPhone:
     return CustomerGetOrCreateByPhone(
-        name="customer test", phone="+5584981175566", email="customer@test.com"
+        name='customer test', phone='+5584981175566', email='customer@test.com'
     )
 
 
 def customer() -> Customer:
     return Customer(
         id=uuid4(),
-        name="customer test",
-        phone="+5584981175566",
-        email="customer@test.com",
+        name='customer test',
+        phone='+5584981175566',
+        email='customer@test.com',
     )
 
 

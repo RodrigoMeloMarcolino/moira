@@ -51,11 +51,11 @@ def async_session_factory():
 
 
 def unique_value(prefix: str) -> str:
-    return f"{prefix}-{uuid4().hex}"
+    return f'{prefix}-{uuid4().hex}'
 
 
 def unique_phone() -> str:
-    return f"+1555{uuid4().int % 10_000_000_000:010d}"
+    return f'+1555{uuid4().int % 10_000_000_000:010d}'
 
 
 class AvailableSlotsRetrieverStub:
@@ -106,9 +106,9 @@ def booking_payload(
     *,
     start_at: datetime,
     customer_phone: str,
-    customer_name: str = "Customer Test",
-    customer_email: str | None = "customer@example.com",
-    customer_notes: str | None = "Please call before the appointment.",
+    customer_name: str = 'Customer Test',
+    customer_email: str | None = 'customer@example.com',
+    customer_notes: str | None = 'Please call before the appointment.',
 ) -> PublicAppointmentBookingCreate:
     return PublicAppointmentBookingCreate(
         offering_id=offering_id,
@@ -129,22 +129,22 @@ async def create_provider_with_offering(
     marker = uuid4().hex
     user = User(
         id=uuid4(),
-        email=f"{marker}@example.com",
-        password_hash="hashed-password",
+        email=f'{marker}@example.com',
+        password_hash='hashed-password',
     )
     provider = Provider(
         id=uuid4(),
         user_id=user.id,
-        display_name="Provider Test",
-        slug=unique_value("provider"),
-        timezone="America/Fortaleza",
-        currency_code="BRL",
+        display_name='Provider Test',
+        slug=unique_value('provider'),
+        timezone='America/Fortaleza',
+        currency_code='BRL',
     )
     offering = Offering(
         id=uuid4(),
         provider_id=provider.id,
-        title="Consulta",
-        description="Atendimento inicial",
+        title='Consulta',
+        description='Atendimento inicial',
         duration_minutes=duration_minutes,
         price_cents=15000,
         is_active=is_active,
@@ -166,8 +166,8 @@ async def create_customer(
     session: AsyncSession,
     *,
     phone: str,
-    name: str = "Existing Customer",
-    email: str | None = "existing@example.com",
+    name: str = 'Existing Customer',
+    email: str | None = 'existing@example.com',
 ) -> Customer:
     customer = Customer(
         id=uuid4(),
@@ -258,8 +258,8 @@ async def test_books_public_appointment_for_new_customer() -> None:
     assert appointment.start_at == expected_start_at
     assert appointment.end_at == expected_start_at + timedelta(minutes=30)
     assert appointment.duration_minutes_snapshot == 30
-    assert appointment.status == "scheduled"
-    assert appointment.customer_notes == "Please call before the appointment."
+    assert appointment.status == 'scheduled'
+    assert appointment.customer_notes == 'Please call before the appointment.'
 
     async with async_session_factory() as session:
         customer = await get_customer_by_phone(session, customer_phone)
@@ -267,8 +267,8 @@ async def test_books_public_appointment_for_new_customer() -> None:
         slots = await list_appointment_slots(session, appointment.id)
 
     assert customer is not None
-    assert customer.name == "Customer Test"
-    assert customer.email == "customer@example.com"
+    assert customer.name == 'Customer Test'
+    assert customer.email == 'customer@example.com'
     assert db_appointment is not None
     assert db_appointment.customer_id == customer.id
     assert db_appointment.start_at == expected_start_at
@@ -291,8 +291,8 @@ async def test_books_public_appointment_reusing_existing_customer() -> None:
             offering.id,
             start_at=start_at,
             customer_phone=customer_phone,
-            customer_name="New Submitted Name",
-            customer_email="new@example.com",
+            customer_name='New Submitted Name',
+            customer_email='new@example.com',
         )
 
         appointment = await build_use_case(session).execute(provider.slug, payload)
@@ -322,7 +322,7 @@ async def test_book_public_appointment_raises_when_offering_is_missing() -> None
 
     async with async_session_factory() as session:
         with pytest.raises(OfferingNotFound):
-            await build_use_case(session).execute("missing-provider", payload)
+            await build_use_case(session).execute('missing-provider', payload)
 
     async with async_session_factory() as session:
         assert await count_customers_by_phone(session, customer_phone) == 0
@@ -363,7 +363,7 @@ async def test_book_public_appointment_raises_when_provider_is_missing() -> None
         )
 
         with pytest.raises(ProviderNotFound):
-            await build_use_case(session).execute("missing-provider", payload)
+            await build_use_case(session).execute('missing-provider', payload)
 
     async with async_session_factory() as session:
         assert await count_customers_by_phone(session, customer_phone) == 0

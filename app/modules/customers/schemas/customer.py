@@ -11,7 +11,7 @@ class CustomerGetOrCreateByPhone(BaseModel):
     phone: str = Field(min_length=8, max_length=32)
     email: str | None = Field(default=None, min_length=3, max_length=255)
 
-    @field_validator("phone")
+    @field_validator('phone')
     @classmethod
     def validate_phone(cls, value: str) -> str:
         try:
