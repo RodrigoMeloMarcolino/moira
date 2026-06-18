@@ -14,24 +14,6 @@ jobs:
     name: integration-tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: moira
-          POSTGRES_USER: moira
-          POSTGRES_PASSWORD: moira
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U moira -d moira"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql+asyncpg://moira:moira@localhost:5432/moira
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -50,8 +32,5 @@ jobs:
       - name: Create test environment file
         run: cp .env.example .env
 
-      - name: Apply migrations
-        run: uv run alembic upgrade head
-
       - name: Run integration tests
-        run: uv run pytest -m integration
+        run: make test-integration

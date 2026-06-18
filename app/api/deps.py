@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import Annotated
 
 from fastapi import Depends
@@ -46,103 +47,163 @@ from app.shared.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-def build_signup_provider_use_case(session: SessionDep) -> SignupProviderUseCase:
-    create_user = CreateUserUseCase(
-        users=SqlAlchemyUserRepository(session),
-        password_hasher=BcryptPasswordHasher(),
-    )
+class RequestContainer:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
 
+    @cached_property
+    def users(self) -> SqlAlchemyUserRepository:
+        return SqlAlchemyUserRepository(self.session)
+
+    @cached_property
+    def providers(self) -> SqlAlchemyProviderRepository:
+        return SqlAlchemyProviderRepository(self.session)
+
+    @cached_property
+    def offerings(self) -> SqlAlchemyOfferingRepository:
+        return SqlAlchemyOfferingRepository(self.session)
+
+    @cached_property
+    def customers(self) -> SQLAlchemyCustomerRepository:
+        return SQLAlchemyCustomerRepository(self.session)
+
+    @cached_property
+    def appointments(self) -> SQLAlchemyAppointmentRepository:
+        return SQLAlchemyAppointmentRepository(self.session)
+
+    @cached_property
+    def appointment_slots(self) -> SQLAlchemyAppointmentSlotRepository:
+        return SQLAlchemyAppointmentSlotRepository(self.session)
+
+    @cached_property
+    def availability_rules(self) -> SQLAlchemyAvailabilityRulesRepository:
+        return SQLAlchemyAvailabilityRulesRepository(self.session)
+
+    @cached_property
+    def unit_of_work(self) -> SqlAlchemyUnitOfWork:
+        return SqlAlchemyUnitOfWork(self.session)
+
+    @cached_property
+    def password_hasher(self) -> BcryptPasswordHasher:
+        return BcryptPasswordHasher()
+
+    @cached_property
+    def create_user_use_case(self) -> CreateUserUseCase:
+        return CreateUserUseCase(
+            users=self.users,
+            password_hasher=self.password_hasher,
+        )
+
+    @cached_property
+    def get_or_create_customer_by_phone_use_case(
+        self,
+    ) -> GetOrCreateCustomerByPhoneUseCase:
+        return GetOrCreateCustomerByPhoneUseCase(customers=self.customers)
+
+    @cached_property
+    def list_provider_available_slots_use_case(
+        self,
+    ) -> ListProviderAvailableSlotsUseCase:
+        return ListProviderAvailableSlotsUseCase(
+            providers=self.providers,
+            appointment_slots=self.appointment_slots,
+            offerings=self.offerings,
+            rules=self.availability_rules,
+        )
+
+
+def build_request_container(session: SessionDep) -> RequestContainer:
+    return RequestContainer(session)
+
+
+RequestContainerDep = Annotated[RequestContainer, Depends(build_request_container)]
+
+
+def build_signup_provider_use_case(
+    container: RequestContainerDep,
+) -> SignupProviderUseCase:
     return SignupProviderUseCase(
-        create_user=create_user,
-        providers=SqlAlchemyProviderRepository(session),
-        unit_of_work=SqlAlchemyUnitOfWork(session),
+        create_user=container.create_user_use_case,
+        providers=container.providers,
+        unit_of_work=container.unit_of_work,
     )
 
 
 def build_get_provider_by_slug_use_case(
-    session: SessionDep,
+    container: RequestContainerDep,
 ) -> GetProviderBySlugUseCase:
     return GetProviderBySlugUseCase(
-        providers=SqlAlchemyProviderRepository(session),
+        providers=container.providers,
     )
 
 
-def build_create_offering_use_case(session: SessionDep) -> CreateOfferingUseCase:
+def build_create_offering_use_case(
+    container: RequestContainerDep,
+) -> CreateOfferingUseCase:
     return CreateOfferingUseCase(
-        providers=SqlAlchemyProviderRepository(session),
-        offerings=SqlAlchemyOfferingRepository(session),
-        unit_of_work=SqlAlchemyUnitOfWork(session),
+        providers=container.providers,
+        offerings=container.offerings,
+        unit_of_work=container.unit_of_work,
     )
 
 
 def build_list_active_provider_offerings_use_case(
-    session: SessionDep,
+    container: RequestContainerDep,
 ) -> ListActiveProviderOfferingsUseCase:
     return ListActiveProviderOfferingsUseCase(
-        providers=SqlAlchemyProviderRepository(session),
-        offerings=SqlAlchemyOfferingRepository(session),
+        providers=container.providers,
+        offerings=container.offerings,
     )
 
 
-def build_update_offering_use_case(session: SessionDep) -> UpdateOfferingUseCase:
+def build_update_offering_use_case(
+    container: RequestContainerDep,
+) -> UpdateOfferingUseCase:
     return UpdateOfferingUseCase(
-        offerings=SqlAlchemyOfferingRepository(session),
-        unit_of_work=SqlAlchemyUnitOfWork(session),
+        offerings=container.offerings,
+        unit_of_work=container.unit_of_work,
     )
 
 
 def build_book_public_appointment_use_case(
-    session: SessionDep,
+    container: RequestContainerDep,
 ) -> BookPublicAppointmentUseCase:
-    get_or_create_customer_by_phone_use_case = GetOrCreateCustomerByPhoneUseCase(
-        customers=SQLAlchemyCustomerRepository(session),
-    )
-    list_provider_available_slots_use_case = ListProviderAvailableSlotsUseCase(
-        providers=SqlAlchemyProviderRepository(session),
-        appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
-        offerings=SqlAlchemyOfferingRepository(session),
-        rules=SQLAlchemyAvailabilityRulesRepository(session),
-    )
-
     return BookPublicAppointmentUseCase(
-        appointments=SQLAlchemyAppointmentRepository(session),
-        appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
-        offerings=SqlAlchemyOfferingRepository(session),
-        providers=SqlAlchemyProviderRepository(session),
-        get_or_create_customer_by_phone=get_or_create_customer_by_phone_use_case,
-        list_provider_available_slots=list_provider_available_slots_use_case,
-        uow=SqlAlchemyUnitOfWork(session),
+        appointments=container.appointments,
+        appointment_slots=container.appointment_slots,
+        offerings=container.offerings,
+        providers=container.providers,
+        get_or_create_customer_by_phone=(
+            container.get_or_create_customer_by_phone_use_case
+        ),
+        list_provider_available_slots=container.list_provider_available_slots_use_case,
+        uow=container.unit_of_work,
     )
 
 
 def build_create_provider_availability_use_case(
-    session: SessionDep,
+    container: RequestContainerDep,
 ) -> CreateAvailabilityRuleUseCase:
     return CreateAvailabilityRuleUseCase(
-        availability_rules=SQLAlchemyAvailabilityRulesRepository(session),
-        providers=SqlAlchemyProviderRepository(session),
-        uow=SqlAlchemyUnitOfWork(session),
+        availability_rules=container.availability_rules,
+        providers=container.providers,
+        uow=container.unit_of_work,
     )
 
 
 def build_list_provider_availability_rules_use_case(
-    session: SessionDep,
+    container: RequestContainerDep,
 ) -> ListProviderAvailabilityRulesUseCase:
     return ListProviderAvailabilityRulesUseCase(
-        availability_rules=SQLAlchemyAvailabilityRulesRepository(session),
-        providers=SqlAlchemyProviderRepository(session),
+        availability_rules=container.availability_rules,
+        providers=container.providers,
     )
 
 
 def build_list_provider_available_slots_use_case(
-    session: SessionDep,
+    container: RequestContainerDep,
 ) -> ListProviderAvailableSlotsUseCase:
-    return ListProviderAvailableSlotsUseCase(
-        appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
-        offerings=SqlAlchemyOfferingRepository(session),
-        providers=SqlAlchemyProviderRepository(session),
-        rules=SQLAlchemyAvailabilityRulesRepository(session),
-    )
+    return container.list_provider_available_slots_use_case
 
 
 SignupProviderUseCaseDep = Annotated[

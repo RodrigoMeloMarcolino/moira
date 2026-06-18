@@ -84,10 +84,8 @@ A senha nunca deve ser retornada pela API. O backend armazena apenas
 ## Qualidade
 
 ```powershell
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy app
-uv run pytest
+make lint
+make test
 ```
 
 ## Testes
@@ -95,22 +93,36 @@ uv run pytest
 Rodar tudo:
 
 ```powershell
-uv run pytest
+make test
 ```
 
 Rodar somente unitarios:
 
 ```powershell
-uv run pytest -m "not integration"
+make test-unit
 ```
 
 Rodar somente integracao:
 
 ```powershell
-uv run pytest -m integration
+make test-integration
 ```
 
-Os testes de integracao esperam que o PostgreSQL esteja rodando via Docker Compose.
+Em ambientes sem `make`, o runner de integracao pode ser chamado diretamente:
+
+```powershell
+uv run python scripts/run_integration_tests.py
+```
+
+Os testes de integracao exigem Docker disponivel. O alvo `make test-integration`
+usa `docker-compose.test.yaml` para subir um PostgreSQL efemero, aplica as
+migrations, executa `pytest -m integration` e remove o container e volumes ao
+final da suite. O container local `moira-postgres`, usado via Docker Compose
+para desenvolvimento, nao e reutilizado nem alterado pelos testes.
+
+Executar `uv run pytest -m integration` diretamente e bloqueado por seguranca,
+porque essa suite precisa receber explicitamente a `DATABASE_URL` efemera criada
+pelo comando de teste.
 
 ## Alembic
 
