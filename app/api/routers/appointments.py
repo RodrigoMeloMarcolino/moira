@@ -30,7 +30,7 @@ appointments_router = APIRouter(tags=['appointments'])
 
 
 @appointments_router.post(
-    '/providers/{provider_slug}/appointments',
+    '/public/providers/{provider_slug}/appointments',
     response_model=AppointmentPublic,
     status_code=status.HTTP_201_CREATED,
 )
@@ -53,6 +53,7 @@ async def book_public_appointment(
     except OfferingDoesNotBelongToProvider as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
+            detail='offering does not belong to provider',
         ) from exc
     except InvalidAppointmentStart as exc:
         raise HTTPException(

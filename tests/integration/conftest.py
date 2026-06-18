@@ -78,7 +78,7 @@ async def signup_provider(
     display_name: str = 'Provider Test',
 ) -> dict:
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': email or f'{unique_value("provider")}@example.com',
             'password': password,
@@ -97,7 +97,7 @@ async def login_provider(
     password: str = 'secure-password',
 ) -> dict:
     response = await client.post(
-        '/auth/login',
+        '/v1/auth/login',
         json={
             'email': email,
             'password': password,

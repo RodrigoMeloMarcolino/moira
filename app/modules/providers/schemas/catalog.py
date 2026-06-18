@@ -40,3 +40,13 @@ class ProviderPublic(BaseModel):
     slug: str
     timezone: str
     currency_code: str
+
+
+class ProviderCatalogPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    display_name: str
+    slug: str
+    timezone: str
+    currency_code: str

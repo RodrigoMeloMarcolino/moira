@@ -8,6 +8,7 @@ from app.modules.providers.application.exceptions import (
 )
 from app.modules.providers.infrastructure.models import Provider
 from app.modules.providers.schemas.catalog import (
+    ProviderCatalogPublic,
     ProviderPublic,
     ProviderSignupCreate,
 )
@@ -38,7 +39,7 @@ async def signup_provider_account(
         ) from exc
 
 
-@providers_router.get('/providers/{slug}', response_model=ProviderPublic)
+@providers_router.get('/public/providers/{slug}', response_model=ProviderCatalogPublic)
 async def get_provider_by_slug(
     slug: str,
     use_case: GetProviderBySlugUseCaseDep,

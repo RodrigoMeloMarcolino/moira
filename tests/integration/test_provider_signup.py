@@ -16,7 +16,7 @@ async def test_signup_provider_creates_user_and_provider(
     password = 'secure-password'
 
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': f'{email_slug}@example.com',
             'password': password,
@@ -56,7 +56,7 @@ async def test_signup_provider_accepts_functional_password_boundaries(
     email_slug = unique_value('provider')
 
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': f'{email_slug}@example.com',
             'password': password,
@@ -75,7 +75,7 @@ async def test_signup_provider_rejects_invalid_functional_password_lengths(
     email_slug = unique_value('provider')
 
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': f'{email_slug}@example.com',
             'password': password,
@@ -93,7 +93,7 @@ async def test_signup_provider_rejects_duplicate_email(
     email = f'{email_slug}@example.com'
 
     first_response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': email,
             'password': 'secure-password',
@@ -103,7 +103,7 @@ async def test_signup_provider_rejects_duplicate_email(
     assert first_response.status_code == 201
 
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': email,
             'password': 'secure-password',
@@ -118,7 +118,7 @@ async def test_signup_provider_generates_distinct_slugs_for_same_display_name(
     client: AsyncClient,
 ) -> None:
     first_response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': f'{unique_value("provider")}@example.com',
             'password': 'secure-password',
@@ -129,7 +129,7 @@ async def test_signup_provider_generates_distinct_slugs_for_same_display_name(
     first_body = first_response.json()
 
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': f'{unique_value("provider")}@example.com',
             'password': 'secure-password',
@@ -146,7 +146,7 @@ async def test_signup_provider_generates_distinct_slugs_for_same_display_name(
 
 async def test_signup_provider_rejects_slug_in_body(client: AsyncClient) -> None:
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
             'email': f'{unique_value("provider")}@example.com',
             'password': 'secure-password',

@@ -16,7 +16,7 @@ async def test_create_offering_with_valid_duration(client: AsyncClient) -> None:
     provider, headers = await signup_authenticated_provider(client)
 
     response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -39,7 +39,7 @@ async def test_create_offering_requires_authentication(client: AsyncClient) -> N
     provider = await signup_provider(client)
 
     response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         json={
             'title': 'Consulta',
             'duration_minutes': 30,
@@ -56,7 +56,7 @@ async def test_create_offering_rejects_other_provider_token(
     other_provider = await signup_provider(client)
 
     response = await client.post(
-        f'/providers/{other_provider["id"]}/offerings',
+        f'/v1/providers/{other_provider["id"]}/offerings',
         headers=first_headers,
         json={
             'title': 'Consulta',
@@ -74,7 +74,7 @@ async def test_create_offering_rejects_duration_that_is_not_multiple_of_15(
     provider, headers = await signup_authenticated_provider(client)
 
     response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -89,7 +89,7 @@ async def test_create_offering_rejects_negative_price(client: AsyncClient) -> No
     provider, headers = await signup_authenticated_provider(client)
 
     response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -107,7 +107,7 @@ async def test_list_provider_offerings_returns_only_active_offerings(
     provider, headers = await signup_authenticated_provider(client)
 
     active_response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Ativa',
@@ -118,7 +118,7 @@ async def test_list_provider_offerings_returns_only_active_offerings(
     assert active_response.status_code == 201
 
     inactive_response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Inativa',
@@ -128,18 +128,28 @@ async def test_list_provider_offerings_returns_only_active_offerings(
     )
     assert inactive_response.status_code == 201
 
-    response = await client.get(f'/providers/{provider["slug"]}/offerings')
+    response = await client.get(f'/v1/public/providers/{provider["slug"]}/offerings')
 
     assert response.status_code == 200
     offerings = response.json()
     assert [offering['title'] for offering in offerings] == ['Ativa']
+
+    admin_response = await client.get(
+        f'/v1/providers/{provider["id"]}/offerings',
+        headers=headers,
+    )
+    assert admin_response.status_code == 200
+    assert [offering['title'] for offering in admin_response.json()] == [
+        'Ativa',
+        'Inativa',
+    ]
 
 
 async def test_patch_offering_can_deactivate_offering(client: AsyncClient) -> None:
     provider, headers = await signup_authenticated_provider(client)
 
     create_response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -150,7 +160,7 @@ async def test_patch_offering_can_deactivate_offering(client: AsyncClient) -> No
     offering = create_response.json()
 
     response = await client.patch(
-        f'/offerings/{offering["id"]}',
+        f'/v1/offerings/{offering["id"]}',
         headers=headers,
         json={'is_active': False},
     )
@@ -158,7 +168,9 @@ async def test_patch_offering_can_deactivate_offering(client: AsyncClient) -> No
     assert response.status_code == 200
     assert response.json()['is_active'] is False
 
-    list_response = await client.get(f'/providers/{provider["slug"]}/offerings')
+    list_response = await client.get(
+        f'/v1/public/providers/{provider["slug"]}/offerings'
+    )
     assert list_response.status_code == 200
     assert list_response.json() == []
 
@@ -170,7 +182,7 @@ async def test_create_offering_returns_404_for_missing_provider(
     _, headers = await signup_authenticated_provider(client)
 
     response = await client.post(
-        f'/providers/{missing_provider_id}/offerings',
+        f'/v1/providers/{missing_provider_id}/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -184,6 +196,8 @@ async def test_create_offering_returns_404_for_missing_provider(
 async def test_list_provider_offerings_returns_404_for_missing_provider(
     client: AsyncClient,
 ) -> None:
-    response = await client.get(f'/providers/{unique_value("missing")}/offerings')
+    response = await client.get(
+        f'/v1/public/providers/{unique_value("missing")}/offerings'
+    )
 
     assert response.status_code == 404
