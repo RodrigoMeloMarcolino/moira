@@ -1,14 +1,11 @@
 import asyncio
-from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_factory, engine
 from app.modules.appointments.application.exceptions import (
     AppointmentBookingConflict,
     AppointmentStartUnavailable,
@@ -47,10 +44,10 @@ from app.shared.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def dispose_engine_after_test() -> AsyncIterator[None]:
-    yield
-    await engine.dispose()
+def async_session_factory():
+    from app.database import async_session_factory as factory
+
+    return factory()
 
 
 def unique_value(prefix: str) -> str:
