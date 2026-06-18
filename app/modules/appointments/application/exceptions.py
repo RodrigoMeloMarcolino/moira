@@ -14,5 +14,9 @@ class AppointmentBookingConflict(AppointmentError):
     pass
 
 
+class AppointmentIdempotencyConflict(AppointmentError):
+    pass
+
+
 class AppointmentStartUnavailable(AppointmentError):
     pass

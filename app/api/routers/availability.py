@@ -6,19 +6,26 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import (
     CreateAvailabilityRuleUseCaseDep,
+    CurrentProviderDep,
     ListProviderAvailabilityRulesUseCaseDep,
     ListProviderAvailableSlotsUseCaseDep,
+    UpdateProviderAvailabilityRuleUseCaseDep,
 )
 from app.modules.appointments.application.exceptions import (
     OfferingDoesNotBelongToProvider,
 )
+from app.modules.availability.application.exceptions import AvailabilityNotFound
 from app.modules.availability.infrastructure.models import AvailabilityRule
 from app.modules.availability.schemas.availability_rules import (
     AvailabilityRuleCreate,
     AvailabilityRulePublic,
+    AvailabilityRuleUpdate,
 )
 from app.modules.offerings.application.exceptions import OfferingNotFound
-from app.modules.providers.application.exceptions import ProviderNotFound
+from app.modules.providers.application.exceptions import (
+    ProviderAccessForbidden,
+    ProviderNotFound,
+)
 
 availability_router = APIRouter(tags=['availability'])
 
@@ -32,13 +39,23 @@ async def create_provider_availability(
     provider_id: UUID,
     payload: AvailabilityRuleCreate,
     use_case: CreateAvailabilityRuleUseCaseDep,
+    current_provider: CurrentProviderDep,
 ) -> AvailabilityRule:
     try:
-        return await use_case.execute(provider_id=provider_id, payload=payload)
+        return await use_case.execute(
+            provider_id=provider_id,
+            payload=payload,
+            current_provider_id=current_provider.id,
+        )
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='provider not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
         ) from exc
 
 
@@ -50,13 +67,44 @@ async def create_provider_availability(
 async def list_provider_availability_rules(
     provider_id: UUID,
     use_case: ListProviderAvailabilityRulesUseCaseDep,
+    current_provider: CurrentProviderDep,
 ) -> list[AvailabilityRule]:
     try:
-        return await use_case.execute(provider_id)
+        return await use_case.execute(provider_id, current_provider.id)
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='provider not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
+        ) from exc
+
+
+@availability_router.patch(
+    '/availability-rules/{rule_id}',
+    response_model=AvailabilityRulePublic,
+    status_code=status.HTTP_200_OK,
+)
+async def update_provider_availability_rule(
+    rule_id: UUID,
+    payload: AvailabilityRuleUpdate,
+    use_case: UpdateProviderAvailabilityRuleUseCaseDep,
+    current_provider: CurrentProviderDep,
+) -> AvailabilityRule:
+    try:
+        return await use_case.execute(rule_id, payload, current_provider.id)
+    except AvailabilityNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='availability rule not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
         ) from exc
 
 

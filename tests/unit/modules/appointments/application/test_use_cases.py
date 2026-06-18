@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.modules.appointments.application.exceptions import (
+    AppointmentIdempotencyConflict,
     AppointmentStartUnavailable,
     InvalidAppointmentStart,
 )
@@ -12,8 +13,12 @@ from app.modules.appointments.application.output_ports import (
     AppointmentRepository,
     AppointmentSlotRepository,
 )
-from app.modules.appointments.application.use_cases import BookPublicAppointmentUseCase
-from app.modules.appointments.infrastructure.models import AppointmentSlot
+from app.modules.appointments.application.use_cases import (
+    BookPublicAppointmentUseCase,
+    ListProviderAppointmentsUseCase,
+)
+from app.modules.appointments.domain.idempotency import build_idempotency_fingerprint
+from app.modules.appointments.infrastructure.models import Appointment, AppointmentSlot
 from app.modules.appointments.schemas.booking import PublicAppointmentBookingCreate
 from app.modules.availability.application.input_ports import (
     ProviderAvailableSlotsRetriever,
@@ -22,7 +27,12 @@ from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.infrastructure.models import Customer
 from app.modules.offerings.application.output_ports import OfferingRepository
 from app.modules.offerings.infrastructure.models import Offering
+from app.modules.providers.application.exceptions import (
+    ProviderAccessForbidden,
+    ProviderNotFound,
+)
 from app.modules.providers.application.output_ports import ProviderRepository
+from app.modules.providers.infrastructure.models import Provider
 from app.shared.application.unit_of_work import UnitOfWork
 
 
@@ -38,6 +48,17 @@ def offering(provider_id: UUID, *, duration_minutes: int = 30) -> Offering:
     )
 
 
+def provider() -> Provider:
+    return Provider(
+        id=uuid4(),
+        user_id=uuid4(),
+        display_name='Provider Test',
+        slug='provider-test',
+        timezone='America/Fortaleza',
+        currency_code='BRL',
+    )
+
+
 def customer() -> Customer:
     return Customer(
         id=uuid4(),
@@ -45,6 +66,21 @@ def customer() -> Customer:
         phone='+155500000000',
         confirmed_phone=True,
         email='customer@example.com',
+    )
+
+
+def appointment(provider_id: UUID, offering_id: UUID) -> Appointment:
+    start_at = datetime(2026, 6, 10, 9, 0)
+    return Appointment(
+        id=uuid4(),
+        provider_id=provider_id,
+        offering_id=offering_id,
+        customer_id=uuid4(),
+        start_at=start_at,
+        end_at=start_at + timedelta(minutes=30),
+        duration_minutes_snapshot=30,
+        status='scheduled',
+        customer_notes=None,
     )
 
 
@@ -69,15 +105,27 @@ def offering_repository_mock(*, active_offering: Offering | None = None) -> Mock
     return offerings
 
 
-def provider_repository_mock(*, provider_id: UUID | None = None) -> Mock:
+def provider_repository_mock(
+    *,
+    provider_id: UUID | None = None,
+    provider_by_id: Provider | None = None,
+) -> Mock:
     providers = Mock(spec=ProviderRepository)
     providers.find_id_by_slug = AsyncMock(return_value=provider_id)
+    providers.get_by_id = AsyncMock(return_value=provider_by_id)
     return providers
 
 
-def appointment_repository_mock() -> Mock:
+def appointment_repository_mock(
+    *,
+    appointment_by_idempotency_key: Appointment | None = None,
+) -> Mock:
     appointments = Mock(spec=AppointmentRepository)
     appointments.add = AsyncMock()
+    appointments.get_by_provider_id_and_idempotency_key = AsyncMock(
+        return_value=appointment_by_idempotency_key
+    )
+    appointments.list_by_provider_id = AsyncMock(return_value=[])
     return appointments
 
 
@@ -192,6 +240,122 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
         expected_start_at + timedelta(minutes=15),
     ]
     assert all(slot.provider_id == provider_id for slot in added_slots)
+
+
+@pytest.mark.asyncio
+async def test_booking_returns_existing_for_same_idempotency_key() -> None:
+    provider_id = uuid4()
+    existing_offering = offering(provider_id)
+    payload = booking_payload(
+        existing_offering.id,
+        start_at=datetime(2026, 6, 10, 9, 0),
+    )
+    existing_appointment = appointment(provider_id, existing_offering.id)
+    existing_appointment.idempotency_key = 'retry-key'
+    existing_appointment.idempotency_fingerprint = build_idempotency_fingerprint(
+        payload.model_dump(mode='json')
+    )
+    appointments = appointment_repository_mock(
+        appointment_by_idempotency_key=existing_appointment,
+    )
+    available_slots = available_slots_retriever_mock(
+        available_starts=[datetime(2026, 6, 10, 9, 0)],
+    )
+    customer_creator_getter = customer_creator_getter_mock()
+    use_case = build_use_case(
+        appointments=appointments,
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        get_or_create_customer_by_phone=customer_creator_getter,
+        list_provider_available_slots=available_slots,
+    )
+
+    result = await use_case.execute('provider-test', payload, 'retry-key')
+
+    assert result is existing_appointment
+    appointments.add.assert_not_awaited()
+    available_slots.execute.assert_not_awaited()
+    customer_creator_getter.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_provider_appointments_returns_owned_appointments() -> None:
+    existing_provider = provider()
+    expected_appointment = appointment(existing_provider.id, uuid4())
+    providers = provider_repository_mock(provider_by_id=existing_provider)
+    appointments = appointment_repository_mock()
+    appointments.list_by_provider_id = AsyncMock(return_value=[expected_appointment])
+    use_case = ListProviderAppointmentsUseCase(
+        providers=providers,
+        appointments=appointments,
+    )
+
+    result = await use_case.execute(existing_provider.id, existing_provider.id)
+
+    providers.get_by_id.assert_awaited_once_with(existing_provider.id)
+    appointments.list_by_provider_id.assert_awaited_once_with(existing_provider.id)
+    assert result == [expected_appointment]
+
+
+@pytest.mark.asyncio
+async def test_list_provider_appointments_raises_when_provider_is_missing() -> None:
+    missing_provider_id = uuid4()
+    providers = provider_repository_mock()
+    appointments = appointment_repository_mock()
+    use_case = ListProviderAppointmentsUseCase(
+        providers=providers,
+        appointments=appointments,
+    )
+
+    with pytest.raises(ProviderNotFound):
+        await use_case.execute(missing_provider_id, uuid4())
+
+    appointments.list_by_provider_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_provider_appointments_raises_when_provider_is_not_owned() -> None:
+    existing_provider = provider()
+    providers = provider_repository_mock(provider_by_id=existing_provider)
+    appointments = appointment_repository_mock()
+    use_case = ListProviderAppointmentsUseCase(
+        providers=providers,
+        appointments=appointments,
+    )
+
+    with pytest.raises(ProviderAccessForbidden):
+        await use_case.execute(existing_provider.id, uuid4())
+
+    appointments.list_by_provider_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_book_public_appointment_rejects_reused_idempotency_key() -> None:
+    provider_id = uuid4()
+    existing_offering = offering(provider_id)
+    existing_appointment = appointment(provider_id, existing_offering.id)
+    existing_appointment.idempotency_key = 'retry-key'
+    existing_appointment.idempotency_fingerprint = 'another-fingerprint'
+    appointments = appointment_repository_mock(
+        appointment_by_idempotency_key=existing_appointment,
+    )
+    use_case = build_use_case(
+        appointments=appointments,
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+    )
+
+    with pytest.raises(AppointmentIdempotencyConflict):
+        await use_case.execute(
+            'provider-test',
+            booking_payload(
+                existing_offering.id,
+                start_at=datetime(2026, 6, 10, 9, 0),
+            ),
+            'retry-key',
+        )
+
+    appointments.add.assert_not_awaited()
 
 
 @pytest.mark.asyncio

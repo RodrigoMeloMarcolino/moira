@@ -8,6 +8,14 @@ from app.modules.appointments.infrastructure.models import Appointment, Appointm
 class AppointmentRepository(Protocol):
     async def add(self, appointment: Appointment) -> None: ...
 
+    async def get_by_provider_id_and_idempotency_key(
+        self,
+        provider_id: UUID,
+        idempotency_key: str,
+    ) -> Appointment | None: ...
+
+    async def list_by_provider_id(self, provider_id: UUID) -> list[Appointment]: ...
+
 
 class AppointmentSlotRepository(Protocol):
     async def add_many(self, appointment_slots: list[AppointmentSlot]) -> None: ...

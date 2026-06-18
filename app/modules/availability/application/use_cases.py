@@ -18,7 +18,10 @@ from app.modules.availability.schemas.availability_rules import (
 )
 from app.modules.offerings.application.exceptions import OfferingNotFound
 from app.modules.offerings.application.output_ports import OfferingRepository
-from app.modules.providers.application.exceptions import ProviderNotFound
+from app.modules.providers.application.exceptions import (
+    ProviderAccessForbidden,
+    ProviderNotFound,
+)
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.shared.application.unit_of_work import UnitOfWork
 
@@ -38,10 +41,14 @@ class CreateAvailabilityRuleUseCase:
         self,
         provider_id: UUID,
         payload: AvailabilityRuleCreate,
+        current_provider_id: UUID,
     ) -> AvailabilityRule:
         provider = await self.providers.get_by_id(provider_id)
         if provider is None:
             raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
+
+        if provider.id != current_provider_id:
+            raise ProviderAccessForbidden('provider access forbidden')
 
         rule = AvailabilityRule(provider_id=provider_id, **payload.model_dump())
         await self.availability_rules.add(rule)
@@ -60,10 +67,17 @@ class ListProviderAvailabilityRulesUseCase:
         self.availability_rules = availability_rules
         self.providers = providers
 
-    async def execute(self, provider_id: UUID) -> list[AvailabilityRule]:
+    async def execute(
+        self,
+        provider_id: UUID,
+        current_provider_id: UUID,
+    ) -> list[AvailabilityRule]:
         provider = await self.providers.get_by_id(provider_id)
         if provider is None:
             raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
+
+        if provider.id != current_provider_id:
+            raise ProviderAccessForbidden('provider access forbidden')
 
         return await self.availability_rules.list_by_provider(provider_id)
 
@@ -81,10 +95,14 @@ class UpdateProviderAvailabilityRuleUseCase:
         self,
         rule_id: UUID,
         payload: AvailabilityRuleUpdate,
+        current_provider_id: UUID,
     ) -> AvailabilityRule:
         rule = await self.availability_rules.get_by_id(rule_id)
         if rule is None:
             raise AvailabilityNotFound(f'availability not found by rule_id {rule_id}')
+
+        if rule.provider_id != current_provider_id:
+            raise ProviderAccessForbidden('provider access forbidden')
 
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(rule, field, value)

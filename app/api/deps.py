@@ -1,20 +1,30 @@
+from datetime import timedelta
 from functools import cached_property
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_session
-from app.modules.appointments.application.use_cases import BookPublicAppointmentUseCase
+from app.modules.appointments.application.use_cases import (
+    BookPublicAppointmentUseCase,
+    ListProviderAppointmentsUseCase,
+)
 from app.modules.appointments.infrastructure.repositories import (
     SQLAlchemyAppointmentRepository,
     SQLAlchemyAppointmentSlotRepository,
 )
+from app.modules.auth.application.exceptions import InvalidAccessToken
+from app.modules.auth.application.use_cases import LoginProviderUseCase
 from app.modules.auth.infrastructure.passwords import BcryptPasswordHasher
+from app.modules.auth.infrastructure.tokens import HmacJwtAccessTokenCodec
 from app.modules.availability.application.use_cases import (
     CreateAvailabilityRuleUseCase,
     ListProviderAvailabilityRulesUseCase,
     ListProviderAvailableSlotsUseCase,
+    UpdateProviderAvailabilityRuleUseCase,
 )
 from app.modules.availability.infrastructure.repositories import (
     SQLAlchemyAvailabilityRulesRepository,
@@ -28,6 +38,7 @@ from app.modules.customers.infrastructure.repositories import (
 from app.modules.offerings.application.use_cases import (
     CreateOfferingUseCase,
     ListActiveProviderOfferingsUseCase,
+    ListProviderOfferingsUseCase,
     UpdateOfferingUseCase,
 )
 from app.modules.offerings.infrastructure.repositories import (
@@ -37,6 +48,7 @@ from app.modules.providers.application.use_cases import (
     GetProviderBySlugUseCase,
     SignupProviderUseCase,
 )
+from app.modules.providers.infrastructure.models import Provider
 from app.modules.providers.infrastructure.repositories import (
     SqlAlchemyProviderRepository,
 )
@@ -45,6 +57,7 @@ from app.modules.users.infrastructure.repositories import SqlAlchemyUserReposito
 from app.shared.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class RequestContainer:
@@ -88,6 +101,17 @@ class RequestContainer:
         return BcryptPasswordHasher()
 
     @cached_property
+    def access_tokens(self) -> HmacJwtAccessTokenCodec:
+        settings = get_settings()
+        return HmacJwtAccessTokenCodec(
+            secret_key=settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+            expires_delta=timedelta(
+                minutes=settings.jwt_access_token_expire_minutes,
+            ),
+        )
+
+    @cached_property
     def create_user_use_case(self) -> CreateUserUseCase:
         return CreateUserUseCase(
             users=self.users,
@@ -111,12 +135,64 @@ class RequestContainer:
             rules=self.availability_rules,
         )
 
+    @cached_property
+    def login_provider_use_case(self) -> LoginProviderUseCase:
+        settings = get_settings()
+        return LoginProviderUseCase(
+            users=self.users,
+            providers=self.providers,
+            password_hasher=self.password_hasher,
+            access_tokens=self.access_tokens,
+            access_token_expires_in=settings.jwt_access_token_expire_minutes * 60,
+        )
+
 
 def build_request_container(session: SessionDep) -> RequestContainer:
     return RequestContainer(session)
 
 
 RequestContainerDep = Annotated[RequestContainer, Depends(build_request_container)]
+
+
+async def get_current_provider(
+    container: RequestContainerDep,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
+) -> Provider:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='authentication required',
+        )
+
+    try:
+        user_id = container.access_tokens.verify_access_token(credentials.credentials)
+    except InvalidAccessToken as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='invalid access token',
+        ) from exc
+
+    user = await container.users.get_by_id(user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='invalid access token',
+        )
+
+    provider = await container.providers.get_by_user_id(user.id)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='invalid access token',
+        )
+
+    return provider
+
+
+CurrentProviderDep = Annotated[Provider, Depends(get_current_provider)]
 
 
 def build_signup_provider_use_case(
@@ -127,6 +203,12 @@ def build_signup_provider_use_case(
         providers=container.providers,
         unit_of_work=container.unit_of_work,
     )
+
+
+def build_login_provider_use_case(
+    container: RequestContainerDep,
+) -> LoginProviderUseCase:
+    return container.login_provider_use_case
 
 
 def build_get_provider_by_slug_use_case(
@@ -151,6 +233,15 @@ def build_list_active_provider_offerings_use_case(
     container: RequestContainerDep,
 ) -> ListActiveProviderOfferingsUseCase:
     return ListActiveProviderOfferingsUseCase(
+        providers=container.providers,
+        offerings=container.offerings,
+    )
+
+
+def build_list_provider_offerings_use_case(
+    container: RequestContainerDep,
+) -> ListProviderOfferingsUseCase:
+    return ListProviderOfferingsUseCase(
         providers=container.providers,
         offerings=container.offerings,
     )
@@ -206,9 +297,31 @@ def build_list_provider_available_slots_use_case(
     return container.list_provider_available_slots_use_case
 
 
+def build_update_provider_availability_rule_use_case(
+    container: RequestContainerDep,
+) -> UpdateProviderAvailabilityRuleUseCase:
+    return UpdateProviderAvailabilityRuleUseCase(
+        availability_rules=container.availability_rules,
+        uow=container.unit_of_work,
+    )
+
+
+def build_list_provider_appointments_use_case(
+    container: RequestContainerDep,
+) -> ListProviderAppointmentsUseCase:
+    return ListProviderAppointmentsUseCase(
+        appointments=container.appointments,
+        providers=container.providers,
+    )
+
+
 SignupProviderUseCaseDep = Annotated[
     SignupProviderUseCase,
     Depends(build_signup_provider_use_case),
+]
+LoginProviderUseCaseDep = Annotated[
+    LoginProviderUseCase,
+    Depends(build_login_provider_use_case),
 ]
 GetProviderBySlugUseCaseDep = Annotated[
     GetProviderBySlugUseCase,
@@ -222,6 +335,10 @@ ListActiveProviderOfferingsUseCaseDep = Annotated[
     ListActiveProviderOfferingsUseCase,
     Depends(build_list_active_provider_offerings_use_case),
 ]
+ListProviderOfferingsUseCaseDep = Annotated[
+    ListProviderOfferingsUseCase,
+    Depends(build_list_provider_offerings_use_case),
+]
 UpdateOfferingUseCaseDep = Annotated[
     UpdateOfferingUseCase,
     Depends(build_update_offering_use_case),
@@ -229,6 +346,10 @@ UpdateOfferingUseCaseDep = Annotated[
 BookPublicAppointmentUseCaseDep = Annotated[
     BookPublicAppointmentUseCase,
     Depends(build_book_public_appointment_use_case),
+]
+ListProviderAppointmentsUseCaseDep = Annotated[
+    ListProviderAppointmentsUseCase,
+    Depends(build_list_provider_appointments_use_case),
 ]
 CreateAvailabilityRuleUseCaseDep = Annotated[
     CreateAvailabilityRuleUseCase,
@@ -241,4 +362,8 @@ ListProviderAvailabilityRulesUseCaseDep = Annotated[
 ListProviderAvailableSlotsUseCaseDep = Annotated[
     ListProviderAvailableSlotsUseCase,
     Depends(build_list_provider_available_slots_use_case),
+]
+UpdateProviderAvailabilityRuleUseCaseDep = Annotated[
+    UpdateProviderAvailabilityRuleUseCase,
+    Depends(build_update_provider_availability_rule_use_case),
 ]

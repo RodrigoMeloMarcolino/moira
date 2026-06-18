@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import (
     CreateOfferingUseCaseDep,
+    CurrentProviderDep,
     ListActiveProviderOfferingsUseCaseDep,
     UpdateOfferingUseCaseDep,
 )
@@ -14,7 +15,10 @@ from app.modules.offerings.schemas.catalog import (
     OfferingPublic,
     OfferingUpdate,
 )
-from app.modules.providers.application.exceptions import ProviderNotFound
+from app.modules.providers.application.exceptions import (
+    ProviderAccessForbidden,
+    ProviderNotFound,
+)
 
 offerings_router = APIRouter(tags=['offerings'])
 
@@ -28,13 +32,19 @@ async def create_offering(
     provider_id: UUID,
     payload: OfferingCreate,
     use_case: CreateOfferingUseCaseDep,
+    current_provider: CurrentProviderDep,
 ) -> Offering:
     try:
-        return await use_case.execute(provider_id, payload)
+        return await use_case.execute(provider_id, payload, current_provider.id)
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='provider not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
         ) from exc
 
 
@@ -63,11 +73,17 @@ async def update_offering(
     offering_id: UUID,
     payload: OfferingUpdate,
     use_case: UpdateOfferingUseCaseDep,
+    current_provider: CurrentProviderDep,
 ) -> Offering:
     try:
-        return await use_case.execute(offering_id, payload)
+        return await use_case.execute(offering_id, payload, current_provider.id)
     except OfferingNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='offering not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
         ) from exc

@@ -18,6 +18,11 @@ class SqlAlchemyProviderRepository:
     async def get_by_id(self, provider_id: UUID) -> Provider | None:
         return await self.session.get(Provider, provider_id)
 
+    async def get_by_user_id(self, user_id: UUID) -> Provider | None:
+        return await self.session.scalar(
+            select(Provider).where(Provider.user_id == user_id)
+        )
+
     async def get_by_slug(self, slug: str) -> Provider | None:
         return await self.session.scalar(select(Provider).where(Provider.slug == slug))
 
