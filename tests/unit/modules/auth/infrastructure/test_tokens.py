@@ -9,7 +9,7 @@ from app.modules.auth.infrastructure.tokens import HmacJwtAccessTokenCodec
 
 def token_codec(*, expires_delta: timedelta = timedelta(minutes=30)):
     return HmacJwtAccessTokenCodec(
-        secret_key='test-secret',
+        secret_key='test-secret-at-least-32-bytes-long',
         algorithm='HS256',
         expires_delta=expires_delta,
     )

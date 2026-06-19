@@ -18,8 +18,9 @@ appointments.
 ## Decision
 
 Use bearer access tokens for provider authentication in the MVP. Tokens are JWTs
-signed with HS256 using the configured application secret, and contain the user
-id as the subject.
+signed with HS256 using the configured application secret, issued and verified
+through a PyJWT-based infrastructure adapter, and contain the user id as the
+subject.
 
 Administrative use cases receive the authenticated provider id and validate
 ownership before mutating or reading provider-owned resources.
