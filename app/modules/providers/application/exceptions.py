@@ -16,3 +16,7 @@ class ProviderSignupConflict(ProviderError):
 
 class ProviderNotFound(ProviderError):
     pass
+
+
+class ProviderAccessForbidden(ProviderError):
+    pass

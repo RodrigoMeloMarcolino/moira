@@ -4,7 +4,9 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import (
     CreateOfferingUseCaseDep,
+    CurrentProviderDep,
     ListActiveProviderOfferingsUseCaseDep,
+    ListProviderOfferingsUseCaseDep,
     UpdateOfferingUseCaseDep,
 )
 from app.modules.offerings.application.exceptions import OfferingNotFound
@@ -14,7 +16,10 @@ from app.modules.offerings.schemas.catalog import (
     OfferingPublic,
     OfferingUpdate,
 )
-from app.modules.providers.application.exceptions import ProviderNotFound
+from app.modules.providers.application.exceptions import (
+    ProviderAccessForbidden,
+    ProviderNotFound,
+)
 
 offerings_router = APIRouter(tags=['offerings'])
 
@@ -28,18 +33,24 @@ async def create_offering(
     provider_id: UUID,
     payload: OfferingCreate,
     use_case: CreateOfferingUseCaseDep,
+    current_provider: CurrentProviderDep,
 ) -> Offering:
     try:
-        return await use_case.execute(provider_id, payload)
+        return await use_case.execute(provider_id, payload, current_provider.id)
     except ProviderNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='provider not found',
         ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
+        ) from exc
 
 
 @offerings_router.get(
-    '/providers/{slug}/offerings',
+    '/public/providers/{slug}/offerings',
     response_model=list[OfferingPublic],
 )
 async def list_active_provider_offerings(
@@ -55,6 +66,29 @@ async def list_active_provider_offerings(
         ) from exc
 
 
+@offerings_router.get(
+    '/providers/{provider_id}/offerings',
+    response_model=list[OfferingPublic],
+)
+async def list_provider_offerings(
+    provider_id: UUID,
+    use_case: ListProviderOfferingsUseCaseDep,
+    current_provider: CurrentProviderDep,
+) -> list[Offering]:
+    try:
+        return await use_case.execute(provider_id, current_provider.id)
+    except ProviderNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='provider not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
+        ) from exc
+
+
 @offerings_router.patch(
     '/offerings/{offering_id}',
     response_model=OfferingPublic,
@@ -63,11 +97,17 @@ async def update_offering(
     offering_id: UUID,
     payload: OfferingUpdate,
     use_case: UpdateOfferingUseCaseDep,
+    current_provider: CurrentProviderDep,
 ) -> Offering:
     try:
-        return await use_case.execute(offering_id, payload)
+        return await use_case.execute(offering_id, payload, current_provider.id)
     except OfferingNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='offering not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
         ) from exc

@@ -11,15 +11,23 @@ async def test_get_provider_by_slug_returns_public_provider(
 ) -> None:
     provider = await signup_provider(client)
 
-    response = await client.get(f'/providers/{provider["slug"]}')
+    response = await client.get(f'/v1/public/providers/{provider["slug"]}')
 
     assert response.status_code == 200
-    assert response.json() == provider
+    body = response.json()
+    assert body == {
+        'id': provider['id'],
+        'display_name': provider['display_name'],
+        'slug': provider['slug'],
+        'timezone': provider['timezone'],
+        'currency_code': provider['currency_code'],
+    }
+    assert 'user_id' not in body
 
 
 async def test_get_provider_by_slug_returns_404_for_missing_provider(
     client: AsyncClient,
 ) -> None:
-    response = await client.get(f'/providers/{unique_value("missing")}')
+    response = await client.get(f'/v1/public/providers/{unique_value("missing")}')
 
     assert response.status_code == 404

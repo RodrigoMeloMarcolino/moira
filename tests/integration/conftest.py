@@ -70,17 +70,48 @@ def unique_value(prefix: str) -> str:
     return f'{prefix}-{uuid4().hex}'
 
 
-async def signup_provider(client: AsyncClient) -> dict:
-    display_name = 'Provider Test'
-    email_slug = unique_value('provider')
+async def signup_provider(
+    client: AsyncClient,
+    *,
+    email: str | None = None,
+    password: str = 'secure-password',
+    display_name: str = 'Provider Test',
+) -> dict:
     response = await client.post(
-        '/providers/signup',
+        '/v1/providers/signup',
         json={
-            'email': f'{email_slug}@example.com',
-            'password': 'secure-password',
+            'email': email or f'{unique_value("provider")}@example.com',
+            'password': password,
             'display_name': display_name,
         },
     )
 
     assert response.status_code == 201
     return response.json()
+
+
+async def login_provider(
+    client: AsyncClient,
+    *,
+    email: str,
+    password: str = 'secure-password',
+) -> dict:
+    response = await client.post(
+        '/v1/auth/login',
+        json={
+            'email': email,
+            'password': password,
+        },
+    )
+
+    assert response.status_code == 200
+    return response.json()
+
+
+async def signup_authenticated_provider(client: AsyncClient) -> tuple[dict, dict]:
+    email = f'{unique_value("provider")}@example.com'
+    password = 'secure-password'
+    provider = await signup_provider(client, email=email, password=password)
+    token = await login_provider(client, email=email, password=password)
+
+    return provider, {'Authorization': f'Bearer {token["access_token"]}'}

@@ -22,6 +22,15 @@ class SqlAlchemyOfferingRepository:
 
         return list(result)
 
+    async def list_by_provider_id(self, provider_id: UUID) -> list[Offering]:
+        result = await self.session.scalars(
+            select(Offering)
+            .where(Offering.provider_id == provider_id)
+            .order_by(Offering.title)
+        )
+
+        return list(result)
+
     async def add(self, offering: Offering) -> None:
         self.session.add(offering)
 

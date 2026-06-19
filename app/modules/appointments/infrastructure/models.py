@@ -29,6 +29,11 @@ class Appointment(Base, TimestampMixin):
             'duration_minutes_snapshot % 15 = 0',
             name='ck_appointment_duration_snapshot_multiple_of_15',
         ),
+        UniqueConstraint(
+            'provider_id',
+            'idempotency_key',
+            name='uq_appointments_provider_idempotency_key',
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -58,6 +63,11 @@ class Appointment(Base, TimestampMixin):
     duration_minutes_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default='scheduled')
     customer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    idempotency_fingerprint: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
     cancel_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reschedule_token_hash: Mapped[str | None] = mapped_column(
         String(255),

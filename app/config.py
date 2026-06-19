@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     )
 
     jwt_secret_key: str = Field(
-        default='change-me-in-local-dev', alias='JWT_SECRET_KEY'
+        default='change-me-in-local-dev-secret-at-least-32-bytes',
+        alias='JWT_SECRET_KEY',
     )
     jwt_algorithm: str = Field(default='HS256', alias='JWT_ALGORITHM')
     jwt_access_token_expire_minutes: int = Field(

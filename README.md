@@ -57,8 +57,8 @@ uv run uvicorn app.main:app --reload
 ## Health checks
 
 ```powershell
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/ready
+curl http://127.0.0.1:8000/v1/health
+curl http://127.0.0.1:8000/v1/ready
 ```
 
 Respostas esperadas:
@@ -75,11 +75,48 @@ Respostas esperadas:
 
 ## Regras de cadastro
 
-O cadastro inicial de provider (`POST /providers/signup`) aceita senhas de 8 a
-64 caracteres.
+O cadastro inicial de provider (`POST /v1/providers/signup`) aceita senhas de
+8 a 64 caracteres.
 
 A senha nunca deve ser retornada pela API. O backend armazena apenas
 `users.password_hash`, gerado com bcrypt.
+
+O login do provider e feito em `POST /v1/auth/login`. Endpoints
+administrativos exigem `Authorization: Bearer <access_token>`.
+
+## Contratos HTTP
+
+A API atual e exposta somente sob `/v1`.
+
+Rotas publicas para clientes finais ficam sob `/v1/public`, por exemplo:
+
+- `GET /v1/public/providers/{slug}`
+- `GET /v1/public/providers/{slug}/offerings`
+- `GET /v1/public/providers/{slug}/available-slots`
+- `POST /v1/public/providers/{slug}/appointments`
+
+Rotas administrativas autenticadas ficam sob `/v1/providers/{provider_id}` ou
+recursos administrativos diretos, por exemplo:
+
+- `POST /v1/providers/{provider_id}/offerings`
+- `GET /v1/providers/{provider_id}/offerings`
+- `PATCH /v1/offerings/{offering_id}`
+- `POST /v1/providers/{provider_id}/availability-rules`
+- `GET /v1/providers/{provider_id}/availability-rules`
+- `PATCH /v1/availability-rules/{rule_id}`
+- `GET /v1/providers/{provider_id}/appointments`
+
+Erros HTTP seguem o envelope:
+
+```json
+{
+  "error": {
+    "code": "provider_not_found",
+    "message": "provider not found",
+    "details": null
+  }
+}
+```
 
 ## Qualidade
 

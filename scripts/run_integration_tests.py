@@ -91,6 +91,7 @@ def _integration_env(host_port: str) -> dict[str, str]:
                 f'postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}'
                 f'@localhost:{host_port}/{POSTGRES_DB}'
             ),
+            'JWT_SECRET_KEY': 'integration-test-secret-at-least-32-bytes',
             'MOIRA_ALLOW_INTEGRATION_DATABASE': '1',
         }
     )
