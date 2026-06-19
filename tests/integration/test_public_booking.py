@@ -15,7 +15,7 @@ def unique_phone() -> str:
 async def _create_bookable_provider(client: AsyncClient) -> tuple[dict, dict, dict]:
     provider, headers = await signup_authenticated_provider(client)
     offering_response = await client.post(
-        f'/providers/{provider["id"]}/offerings',
+        f'/v1/providers/{provider["id"]}/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -25,7 +25,7 @@ async def _create_bookable_provider(client: AsyncClient) -> tuple[dict, dict, di
     assert offering_response.status_code == 201
 
     availability_response = await client.post(
-        f'/providers/{provider["id"]}/availability-rules',
+        f'/v1/providers/{provider["id"]}/availability-rules',
         headers=headers,
         json={
             'weekday': 3,
@@ -51,12 +51,12 @@ async def test_public_booking_reuses_same_idempotency_key_payload(
     idempotency_headers = {'Idempotency-Key': unique_value('retry')}
 
     first_response = await client.post(
-        f'/providers/{provider["slug"]}/appointments',
+        f'/v1/public/providers/{provider["slug"]}/appointments',
         headers=idempotency_headers,
         json=payload,
     )
     second_response = await client.post(
-        f'/providers/{provider["slug"]}/appointments',
+        f'/v1/public/providers/{provider["slug"]}/appointments',
         headers=idempotency_headers,
         json=payload,
     )
@@ -66,7 +66,7 @@ async def test_public_booking_reuses_same_idempotency_key_payload(
     assert second_response.json()['id'] == first_response.json()['id']
 
     appointments_response = await client.get(
-        f'/providers/{provider["id"]}/appointments',
+        f'/v1/providers/{provider["id"]}/appointments',
         headers=headers,
     )
     assert appointments_response.status_code == 200
@@ -88,15 +88,22 @@ async def test_public_booking_rejects_same_idempotency_key_with_other_payload(
     }
 
     first_response = await client.post(
-        f'/providers/{provider["slug"]}/appointments',
+        f'/v1/public/providers/{provider["slug"]}/appointments',
         headers=idempotency_headers,
         json=payload,
     )
     second_response = await client.post(
-        f'/providers/{provider["slug"]}/appointments',
+        f'/v1/public/providers/{provider["slug"]}/appointments',
         headers=idempotency_headers,
         json={**payload, 'customer_name': 'Other Customer'},
     )
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
+    assert second_response.json() == {
+        'error': {
+            'code': 'idempotency_key_was_already_used_with_another_payload',
+            'message': 'idempotency key was already used with another payload',
+            'details': None,
+        }
+    }

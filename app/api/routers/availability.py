@@ -109,7 +109,7 @@ async def update_provider_availability_rule(
 
 
 @availability_router.get(
-    '/providers/{provider_slug}/available-slots',
+    '/public/providers/{provider_slug}/available-slots',
     response_model=list[datetime],
 )
 async def list_provider_available_slots(

@@ -6,6 +6,7 @@ from app.api.deps import (
     CreateOfferingUseCaseDep,
     CurrentProviderDep,
     ListActiveProviderOfferingsUseCaseDep,
+    ListProviderOfferingsUseCaseDep,
     UpdateOfferingUseCaseDep,
 )
 from app.modules.offerings.application.exceptions import OfferingNotFound
@@ -49,7 +50,7 @@ async def create_offering(
 
 
 @offerings_router.get(
-    '/providers/{slug}/offerings',
+    '/public/providers/{slug}/offerings',
     response_model=list[OfferingPublic],
 )
 async def list_active_provider_offerings(
@@ -62,6 +63,29 @@ async def list_active_provider_offerings(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='provider not found',
+        ) from exc
+
+
+@offerings_router.get(
+    '/providers/{provider_id}/offerings',
+    response_model=list[OfferingPublic],
+)
+async def list_provider_offerings(
+    provider_id: UUID,
+    use_case: ListProviderOfferingsUseCaseDep,
+    current_provider: CurrentProviderDep,
+) -> list[Offering]:
+    try:
+        return await use_case.execute(provider_id, current_provider.id)
+    except ProviderNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='provider not found',
+        ) from exc
+    except ProviderAccessForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='provider access forbidden',
         ) from exc
 
 
