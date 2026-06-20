@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Protocol
+from typing import Optional, Protocol
 from uuid import UUID
 
 from app.modules.appointments.infrastructure.models import Appointment, AppointmentSlot
@@ -12,7 +12,7 @@ class AppointmentRepository(Protocol):
         self,
         provider_id: UUID,
         idempotency_key: str,
-    ) -> Appointment | None: ...
+    ) -> Optional[Appointment]: ...
 
     async def list_by_provider_id(self, provider_id: UUID) -> list[Appointment]: ...
 

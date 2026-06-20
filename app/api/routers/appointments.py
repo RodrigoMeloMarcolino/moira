@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
 
@@ -34,7 +34,7 @@ async def book_public_appointment(
     provider_slug: str,
     payload: PublicAppointmentBookingCreate,
     use_case: BookPublicAppointmentUseCaseDep,
-    idempotency_key: Annotated[str | None, Header(alias='Idempotency-Key')] = None,
+    idempotency_key: Annotated[Optional[str], Header(alias='Idempotency-Key')] = None,
 ):
     try:
         return await use_case.execute(provider_slug, payload, idempotency_key)

@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Optional
 from uuid import UUID
 
 from app.modules.appointments.application.exceptions import (
@@ -53,7 +54,7 @@ class BookPublicAppointmentUseCase:
         self,
         provider_slug: str,
         payload: PublicAppointmentBookingCreate,
-        idempotency_key: str | None = None,
+        idempotency_key: Optional[str] = None,
     ) -> Appointment:
         idempotency_fingerprint = None
         if idempotency_key is not None:

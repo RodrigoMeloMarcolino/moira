@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
@@ -86,8 +87,8 @@ def appointment_slot(provider_id: UUID, slot_start_at: datetime) -> AppointmentS
 
 def provider_repository_mock(
     *,
-    provider_by_id: Provider | None = None,
-    provider_by_slug: Provider | None = None,
+    provider_by_id: Optional[Provider] = None,
+    provider_by_slug: Optional[Provider] = None,
 ) -> Mock:
     providers = Mock(spec=ProviderRepository)
     providers.get_by_id = AsyncMock(return_value=provider_by_id)
@@ -97,9 +98,9 @@ def provider_repository_mock(
 
 def availability_rule_repository_mock(
     *,
-    rule_by_id: AvailabilityRule | None = None,
-    rules_by_provider: list[AvailabilityRule] | None = None,
-    active_rules: list[AvailabilityRule] | None = None,
+    rule_by_id: Optional[AvailabilityRule] = None,
+    rules_by_provider: Optional[list[AvailabilityRule]] = None,
+    active_rules: Optional[list[AvailabilityRule]] = None,
 ) -> Mock:
     rules = Mock(spec=AvailabilityRuleRepository)
     rules.add = AsyncMock()
@@ -113,7 +114,7 @@ def availability_rule_repository_mock(
 
 def offering_repository_mock(
     *,
-    active_offering: Offering | None = None,
+    active_offering: Optional[Offering] = None,
 ) -> Mock:
     offerings = Mock(spec=OfferingRepository)
     offerings.get_active_by_id = AsyncMock(return_value=active_offering)
@@ -122,7 +123,7 @@ def offering_repository_mock(
 
 def appointment_slot_repository_mock(
     *,
-    occupied_slots: list[AppointmentSlot] | None = None,
+    occupied_slots: Optional[list[AppointmentSlot]] = None,
 ) -> Mock:
     appointment_slots = Mock(spec=AppointmentSlotRepository)
     appointment_slots.list_by_provider_and_time_range = AsyncMock(

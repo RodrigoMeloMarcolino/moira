@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -18,7 +19,7 @@ class SQLAlchemyAppointmentRepository:
         self,
         provider_id: UUID,
         idempotency_key: str,
-    ) -> Appointment | None:
+    ) -> Optional[Appointment]:
         return await self.session.scalar(
             select(Appointment).where(
                 Appointment.provider_id == provider_id,

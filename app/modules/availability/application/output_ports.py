@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Optional, Protocol
 from uuid import UUID
 
 from app.modules.availability.infrastructure.models import AvailabilityRule
@@ -7,7 +7,7 @@ from app.modules.availability.infrastructure.models import AvailabilityRule
 class AvailabilityRuleRepository(Protocol):
     async def add(self, rule: AvailabilityRule) -> None: ...
 
-    async def get_by_id(self, rule_id: UUID) -> AvailabilityRule | None: ...
+    async def get_by_id(self, rule_id: UUID) -> Optional[AvailabilityRule]: ...
 
     async def list_active_by_provider_and_weekday(
         self,

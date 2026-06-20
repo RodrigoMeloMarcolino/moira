@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -35,8 +36,8 @@ def provider(user_id) -> Provider:
 
 def build_use_case(
     *,
-    existing_user: User | None,
-    existing_provider: Provider | None,
+    existing_user: Optional[User],
+    existing_provider: Optional[Provider],
     password_matches: bool = True,
 ) -> LoginProviderUseCase:
     users = Mock(spec=UserRepository)

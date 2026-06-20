@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text
@@ -34,7 +35,7 @@ class Offering(Base, TimestampMixin):
     )
 
     title: Mapped[str] = mapped_column(String(120), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

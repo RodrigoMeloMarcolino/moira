@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,7 +14,7 @@ class SQLAlchemyAvailabilityRulesRepository:
     async def add(self, rule: AvailabilityRule) -> None:
         self.session.add(rule)
 
-    async def get_by_id(self, rule_id: UUID) -> AvailabilityRule | None:
+    async def get_by_id(self, rule_id: UUID) -> Optional[AvailabilityRule]:
         return await self.session.get(AvailabilityRule, rule_id)
 
     async def list_active_by_provider_and_weekday(

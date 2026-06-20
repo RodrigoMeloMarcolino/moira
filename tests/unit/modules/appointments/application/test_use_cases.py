@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
@@ -95,7 +96,7 @@ def booking_payload(
     )
 
 
-def offering_repository_mock(*, active_offering: Offering | None = None) -> Mock:
+def offering_repository_mock(*, active_offering: Optional[Offering] = None) -> Mock:
     offerings = Mock(spec=OfferingRepository)
     offerings.get_active_by_id = AsyncMock(return_value=active_offering)
     return offerings
@@ -103,8 +104,8 @@ def offering_repository_mock(*, active_offering: Offering | None = None) -> Mock
 
 def provider_repository_mock(
     *,
-    provider_id: UUID | None = None,
-    provider_by_id: Provider | None = None,
+    provider_id: Optional[UUID] = None,
+    provider_by_id: Optional[Provider] = None,
 ) -> Mock:
     providers = Mock(spec=ProviderRepository)
     providers.find_id_by_slug = AsyncMock(return_value=provider_id)
@@ -114,7 +115,7 @@ def provider_repository_mock(
 
 def appointment_repository_mock(
     *,
-    appointment_by_idempotency_key: Appointment | None = None,
+    appointment_by_idempotency_key: Optional[Appointment] = None,
 ) -> Mock:
     appointments = Mock(spec=AppointmentRepository)
     appointments.add = AsyncMock()
@@ -131,7 +132,10 @@ def appointment_slot_repository_mock() -> Mock:
     return appointment_slots
 
 
-def customer_creator_getter_mock(*, returned_customer: Customer | None = None) -> Mock:
+def customer_creator_getter_mock(
+    *,
+    returned_customer: Optional[Customer] = None,
+) -> Mock:
     creator_getter = Mock(spec=CustomerCreatorGetter)
     creator_getter.execute = AsyncMock(return_value=returned_customer or customer())
     return creator_getter
@@ -157,13 +161,13 @@ def unit_of_work_mock() -> Mock:
 
 def build_use_case(
     *,
-    appointments: Mock | None = None,
-    offerings: Mock | None = None,
-    providers: Mock | None = None,
-    appointment_slots: Mock | None = None,
-    get_or_create_customer_by_phone: Mock | None = None,
-    list_provider_available_slots: Mock | None = None,
-    uow: Mock | None = None,
+    appointments: Optional[Mock] = None,
+    offerings: Optional[Mock] = None,
+    providers: Optional[Mock] = None,
+    appointment_slots: Optional[Mock] = None,
+    get_or_create_customer_by_phone: Optional[Mock] = None,
+    list_provider_available_slots: Optional[Mock] = None,
+    uow: Optional[Mock] = None,
 ) -> BookPublicAppointmentUseCase:
     return BookPublicAppointmentUseCase(
         appointments=appointments or appointment_repository_mock(),
