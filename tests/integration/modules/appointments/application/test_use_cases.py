@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Optional
 from uuid import UUID, uuid4
 
 import pytest
@@ -59,7 +60,7 @@ def unique_phone() -> str:
 
 
 class AvailableSlotsRetrieverStub:
-    def __init__(self, available_starts: list[datetime] | None = None) -> None:
+    def __init__(self, available_starts: Optional[list[datetime]] = None) -> None:
         self.available_starts = available_starts
         self.calls: list[tuple[str, UUID, object]] = []
 
@@ -83,7 +84,7 @@ class AvailableSlotsRetrieverStub:
 def build_use_case(
     session: AsyncSession,
     *,
-    available_slots: AvailableSlotsRetrieverStub | None = None,
+    available_slots: Optional[AvailableSlotsRetrieverStub] = None,
 ) -> BookPublicAppointmentUseCase:
     available_slots_retriever = available_slots or AvailableSlotsRetrieverStub()
     get_or_create_customer_by_phone = GetOrCreateCustomerByPhoneUseCase(
@@ -107,8 +108,8 @@ def booking_payload(
     start_at: datetime,
     customer_phone: str,
     customer_name: str = 'Customer Test',
-    customer_email: str | None = 'customer@example.com',
-    customer_notes: str | None = 'Please call before the appointment.',
+    customer_email: Optional[str] = 'customer@example.com',
+    customer_notes: Optional[str] = 'Please call before the appointment.',
 ) -> PublicAppointmentBookingCreate:
     return PublicAppointmentBookingCreate(
         offering_id=offering_id,
@@ -167,7 +168,7 @@ async def create_customer(
     *,
     phone: str,
     name: str = 'Existing Customer',
-    email: str | None = 'existing@example.com',
+    email: Optional[str] = 'existing@example.com',
 ) -> Customer:
     customer = Customer(
         id=uuid4(),
@@ -190,7 +191,10 @@ async def count_customers_by_phone(session: AsyncSession, phone: str) -> int:
     return int(count or 0)
 
 
-async def get_customer_by_phone(session: AsyncSession, phone: str) -> Customer | None:
+async def get_customer_by_phone(
+    session: AsyncSession,
+    phone: str,
+) -> Optional[Customer]:
     return await session.scalar(select(Customer).where(Customer.phone == phone))
 
 

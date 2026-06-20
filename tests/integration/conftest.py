@@ -1,6 +1,7 @@
 import os
 import sys
 from collections.abc import AsyncIterator
+from typing import Optional
 from uuid import uuid4
 
 import pytest
@@ -73,7 +74,7 @@ def unique_value(prefix: str) -> str:
 async def signup_provider(
     client: AsyncClient,
     *,
-    email: str | None = None,
+    email: Optional[str] = None,
     password: str = 'secure-password',
     display_name: str = 'Provider Test',
 ) -> dict:

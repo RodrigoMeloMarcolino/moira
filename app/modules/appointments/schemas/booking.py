@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -14,8 +15,8 @@ class PublicAppointmentBookingCreate(BaseModel):
     start_at: datetime
     customer_name: str = Field(min_length=1, max_length=120)
     customer_phone: str = Field(min_length=8, max_length=32)
-    customer_email: str | None = Field(default=None, min_length=3, max_length=255)
-    customer_notes: str | None = None
+    customer_email: Optional[str] = Field(default=None, min_length=3, max_length=255)
+    customer_notes: Optional[str] = None
 
     @field_validator('customer_phone')
     @classmethod
@@ -37,4 +38,4 @@ class AppointmentPublic(BaseModel):
     end_at: datetime
     duration_minutes_snapshot: int
     status: str
-    customer_notes: str | None
+    customer_notes: Optional[str]

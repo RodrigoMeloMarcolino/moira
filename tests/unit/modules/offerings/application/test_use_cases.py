@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
@@ -47,8 +48,8 @@ def offering(provider_id: UUID) -> Offering:
 
 def provider_repository_mock(
     *,
-    provider_by_id: Provider | None = None,
-    provider_by_slug: Provider | None = None,
+    provider_by_id: Optional[Provider] = None,
+    provider_by_slug: Optional[Provider] = None,
 ) -> Mock:
     providers = Mock(spec=ProviderRepository)
     providers.get_by_id = AsyncMock(return_value=provider_by_id)
@@ -58,8 +59,8 @@ def provider_repository_mock(
 
 def offering_repository_mock(
     *,
-    offering_by_id: Offering | None = None,
-    active_offerings: list[Offering] | None = None,
+    offering_by_id: Optional[Offering] = None,
+    active_offerings: Optional[list[Offering]] = None,
 ) -> Mock:
     offerings = Mock(spec=OfferingRepository)
     offerings.get_by_id = AsyncMock(return_value=offering_by_id)

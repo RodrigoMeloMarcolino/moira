@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -26,7 +27,7 @@ def customer() -> Customer:
     )
 
 
-def customer_repository_mock(*, customer_by_phone: Customer | None = None) -> Mock:
+def customer_repository_mock(*, customer_by_phone: Optional[Customer] = None) -> Mock:
     customers = Mock(spec=CustomerRepository)
     customers.get_by_phone = AsyncMock(return_value=customer_by_phone)
     customers.add = AsyncMock()
@@ -36,7 +37,7 @@ def customer_repository_mock(*, customer_by_phone: Customer | None = None) -> Mo
 
 def get_or_create_customer_by_phone_use_case(
     *,
-    customers: Mock | None = None,
+    customers: Optional[Mock] = None,
 ) -> GetOrCreateCustomerByPhoneUseCase:
     return GetOrCreateCustomerByPhoneUseCase(
         customers=customers or customer_repository_mock()

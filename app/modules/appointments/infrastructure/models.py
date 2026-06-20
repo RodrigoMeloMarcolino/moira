@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -62,14 +63,14 @@ class Appointment(Base, TimestampMixin):
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration_minutes_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default='scheduled')
-    customer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    idempotency_fingerprint: Mapped[str | None] = mapped_column(
+    customer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    idempotency_fingerprint: Mapped[Optional[str]] = mapped_column(
         String(64),
         nullable=True,
     )
-    cancel_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    reschedule_token_hash: Mapped[str | None] = mapped_column(
+    cancel_token_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reschedule_token_hash: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,
     )

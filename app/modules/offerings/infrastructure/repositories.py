@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -10,7 +11,7 @@ class SqlAlchemyOfferingRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_id(self, offering_id: UUID) -> Offering | None:
+    async def get_by_id(self, offering_id: UUID) -> Optional[Offering]:
         return await self.session.get(Offering, offering_id)
 
     async def list_active_by_provider_id(self, provider_id: UUID) -> list[Offering]:
@@ -34,7 +35,7 @@ class SqlAlchemyOfferingRepository:
     async def add(self, offering: Offering) -> None:
         self.session.add(offering)
 
-    async def get_active_by_id(self, offering_id: UUID) -> Offering | None:
+    async def get_active_by_id(self, offering_id: UUID) -> Optional[Offering]:
         return await self.session.scalar(
             select(Offering).where(
                 Offering.id == offering_id, Offering.is_active.is_(True)

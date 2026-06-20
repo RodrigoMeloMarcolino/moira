@@ -1,11 +1,11 @@
-from typing import Protocol
+from typing import Optional, Protocol
 from uuid import UUID
 
 from app.modules.offerings.infrastructure.models import Offering
 
 
 class OfferingRepository(Protocol):
-    async def get_by_id(self, offering_id: UUID) -> Offering | None: ...
+    async def get_by_id(self, offering_id: UUID) -> Optional[Offering]: ...
 
     async def list_active_by_provider_id(self, provider_id: UUID) -> list[Offering]: ...
 
@@ -13,4 +13,4 @@ class OfferingRepository(Protocol):
 
     async def add(self, offering: Offering) -> None: ...
 
-    async def get_active_by_id(self, offering_id: UUID) -> Offering | None: ...
+    async def get_active_by_id(self, offering_id: UUID) -> Optional[Offering]: ...

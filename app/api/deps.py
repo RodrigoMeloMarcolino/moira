@@ -1,6 +1,6 @@
 from datetime import timedelta
 from functools import cached_property
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -157,7 +157,7 @@ RequestContainerDep = Annotated[RequestContainer, Depends(build_request_containe
 async def get_current_provider(
     container: RequestContainerDep,
     credentials: Annotated[
-        HTTPAuthorizationCredentials | None,
+        Optional[HTTPAuthorizationCredentials],
         Depends(bearer_scheme),
     ],
 ) -> Provider:

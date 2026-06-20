@@ -1,6 +1,7 @@
 import re
 import secrets
 import unicodedata
+from typing import Optional
 
 MAX_PROVIDER_SLUG_LENGTH = 80
 PROVIDER_SLUG_SUFFIX_BYTES = 4
@@ -33,7 +34,7 @@ def _truncate_base(base: str, suffix: str) -> str:
     return fallback or DEFAULT_PROVIDER_SLUG_BASE[:max_base_length]
 
 
-def generate_provider_slug(display_name: str, *, suffix: str | None = None) -> str:
+def generate_provider_slug(display_name: str, *, suffix: Optional[str] = None) -> str:
     base = _slugify_base(display_name)
     slug_suffix = suffix or secrets.token_hex(PROVIDER_SLUG_SUFFIX_BYTES)
     truncated_base = _truncate_base(base, slug_suffix)

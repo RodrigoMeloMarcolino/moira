@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
@@ -42,8 +43,8 @@ def user() -> User:
 
 def user_creator_mock(
     *,
-    returned_user: User | None = None,
-    error: Exception | None = None,
+    returned_user: Optional[User] = None,
+    error: Optional[Exception] = None,
 ) -> Mock:
     create_user = Mock(spec=UserCreator)
     create_user.execute = AsyncMock(
@@ -55,8 +56,8 @@ def user_creator_mock(
 
 def provider_repository_mock(
     *,
-    existing_slug_id: UUID | None = None,
-    provider_by_slug: Provider | None = None,
+    existing_slug_id: Optional[UUID] = None,
+    provider_by_slug: Optional[Provider] = None,
 ) -> Mock:
     providers = Mock(spec=ProviderRepository)
     providers.find_id_by_slug = AsyncMock(return_value=existing_slug_id)
@@ -65,7 +66,7 @@ def provider_repository_mock(
     return providers
 
 
-def unit_of_work_mock(*, commit_error: Exception | None = None) -> Mock:
+def unit_of_work_mock(*, commit_error: Optional[Exception] = None) -> Mock:
     unit_of_work = Mock(spec=UnitOfWork)
     unit_of_work.flush = AsyncMock()
     unit_of_work.commit = AsyncMock(side_effect=commit_error)
@@ -76,9 +77,9 @@ def unit_of_work_mock(*, commit_error: Exception | None = None) -> Mock:
 
 def signup_use_case(
     *,
-    create_user: Mock | None = None,
-    providers: Mock | None = None,
-    unit_of_work: Mock | None = None,
+    create_user: Optional[Mock] = None,
+    providers: Optional[Mock] = None,
+    unit_of_work: Optional[Mock] = None,
 ) -> SignupProviderUseCase:
     return SignupProviderUseCase(
         create_user=create_user or user_creator_mock(),

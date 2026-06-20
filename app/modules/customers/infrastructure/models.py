@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, String, UniqueConstraint
@@ -36,7 +37,7 @@ class Customer(Base, TimestampMixin):
         default=True,
     )
 
-    email: Mapped[str | None] = mapped_column(
+    email: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,
     )
