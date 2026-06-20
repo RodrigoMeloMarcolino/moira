@@ -142,12 +142,10 @@ def unit_of_work_mock() -> Mock:
 @pytest.mark.asyncio
 async def test_create_availability_rule_creates_rule_for_existing_provider() -> None:
     existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
     rules = availability_rule_repository_mock()
     unit_of_work = unit_of_work_mock()
     use_case = CreateAvailabilityRuleUseCase(
         availability_rules=rules,
-        providers=providers,
         uow=unit_of_work,
     )
     payload = AvailabilityRuleCreate(
@@ -156,13 +154,8 @@ async def test_create_availability_rule_creates_rule_for_existing_provider() -> 
         end_time=time(12, 0),
     )
 
-    created = await use_case.execute(
-        existing_provider.id,
-        payload,
-        existing_provider.id,
-    )
+    created = await use_case.execute(payload, existing_provider.id)
 
-    providers.get_by_id.assert_awaited_once_with(existing_provider.id)
     rules.add.assert_awaited_once_with(created)
     unit_of_work.commit.assert_awaited_once_with()
     unit_of_work.refresh.assert_awaited_once_with(created)
@@ -174,14 +167,12 @@ async def test_create_availability_rule_creates_rule_for_existing_provider() -> 
 
 
 @pytest.mark.asyncio
-async def test_create_availability_rule_raises_when_provider_is_missing() -> None:
-    missing_provider_id = uuid4()
-    providers = provider_repository_mock()
+async def test_create_availability_rule_uses_current_provider_id_from_token() -> None:
+    current_provider_id = uuid4()
     rules = availability_rule_repository_mock()
     unit_of_work = unit_of_work_mock()
     use_case = CreateAvailabilityRuleUseCase(
         availability_rules=rules,
-        providers=providers,
         uow=unit_of_work,
     )
     payload = AvailabilityRuleCreate(
@@ -190,88 +181,40 @@ async def test_create_availability_rule_raises_when_provider_is_missing() -> Non
         end_time=time(12, 0),
     )
 
-    with pytest.raises(ProviderNotFound):
-        await use_case.execute(missing_provider_id, payload, uuid4())
+    created = await use_case.execute(payload, current_provider_id)
 
-    providers.get_by_id.assert_awaited_once_with(missing_provider_id)
-    rules.add.assert_not_awaited()
-    unit_of_work.commit.assert_not_awaited()
-    unit_of_work.refresh.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_create_availability_rule_raises_when_provider_is_not_owned() -> None:
-    existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
-    rules = availability_rule_repository_mock()
-    unit_of_work = unit_of_work_mock()
-    use_case = CreateAvailabilityRuleUseCase(
-        availability_rules=rules,
-        providers=providers,
-        uow=unit_of_work,
-    )
-    payload = AvailabilityRuleCreate(
-        weekday=3,
-        start_time=time(8, 0),
-        end_time=time(12, 0),
-    )
-
-    with pytest.raises(ProviderAccessForbidden):
-        await use_case.execute(existing_provider.id, payload, uuid4())
-
-    rules.add.assert_not_awaited()
-    unit_of_work.commit.assert_not_awaited()
+    rules.add.assert_awaited_once_with(created)
+    unit_of_work.commit.assert_awaited_once_with()
+    unit_of_work.refresh.assert_awaited_once_with(created)
+    assert created.provider_id == current_provider_id
 
 
 @pytest.mark.asyncio
 async def test_list_provider_availability_rules_returns_rules() -> None:
     existing_provider = provider()
     expected_rule = availability_rule(existing_provider.id)
-    providers = provider_repository_mock(provider_by_id=existing_provider)
     rules = availability_rule_repository_mock(rules_by_provider=[expected_rule])
     use_case = ListProviderAvailabilityRulesUseCase(
         availability_rules=rules,
-        providers=providers,
     )
 
-    result = await use_case.execute(existing_provider.id, existing_provider.id)
+    result = await use_case.execute(existing_provider.id)
 
-    providers.get_by_id.assert_awaited_once_with(existing_provider.id)
     rules.list_by_provider.assert_awaited_once_with(existing_provider.id)
     assert result == [expected_rule]
 
 
 @pytest.mark.asyncio
-async def test_list_availability_rules_raises_when_provider_is_missing() -> None:
-    missing_provider_id = uuid4()
-    providers = provider_repository_mock()
+async def test_list_availability_rules_uses_current_provider_id_from_token() -> None:
+    current_provider_id = uuid4()
     rules = availability_rule_repository_mock()
     use_case = ListProviderAvailabilityRulesUseCase(
         availability_rules=rules,
-        providers=providers,
     )
 
-    with pytest.raises(ProviderNotFound):
-        await use_case.execute(missing_provider_id, uuid4())
+    await use_case.execute(current_provider_id)
 
-    providers.get_by_id.assert_awaited_once_with(missing_provider_id)
-    rules.list_by_provider.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_list_availability_rules_raises_when_provider_is_not_owned() -> None:
-    existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
-    rules = availability_rule_repository_mock()
-    use_case = ListProviderAvailabilityRulesUseCase(
-        availability_rules=rules,
-        providers=providers,
-    )
-
-    with pytest.raises(ProviderAccessForbidden):
-        await use_case.execute(existing_provider.id, uuid4())
-
-    rules.list_by_provider.assert_not_awaited()
+    rules.list_by_provider.assert_awaited_once_with(current_provider_id)
 
 
 @pytest.mark.asyncio

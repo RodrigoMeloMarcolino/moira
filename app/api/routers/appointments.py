@@ -1,5 +1,4 @@
 from typing import Annotated, Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, status
 
@@ -21,10 +20,7 @@ from app.modules.appointments.schemas.booking import (
     PublicAppointmentBookingCreate,
 )
 from app.modules.offerings.application.exceptions import OfferingNotFound
-from app.modules.providers.application.exceptions import (
-    ProviderAccessForbidden,
-    ProviderNotFound,
-)
+from app.modules.providers.application.exceptions import ProviderNotFound
 
 appointments_router = APIRouter(tags=['appointments'])
 
@@ -77,23 +73,11 @@ async def book_public_appointment(
 
 
 @appointments_router.get(
-    '/providers/{provider_id}/appointments',
+    '/appointments',
     response_model=list[AppointmentPublic],
 )
 async def list_provider_appointments(
-    provider_id: UUID,
     use_case: ListProviderAppointmentsUseCaseDep,
     current_provider: CurrentProviderDep,
 ) -> list[Appointment]:
-    try:
-        return await use_case.execute(provider_id, current_provider.id)
-    except ProviderNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='provider not found',
-        ) from exc
-    except ProviderAccessForbidden as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='provider access forbidden',
-        ) from exc
+    return await use_case.execute(current_provider.id)

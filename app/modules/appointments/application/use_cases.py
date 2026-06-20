@@ -25,10 +25,7 @@ from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone
 from app.modules.offerings.application.exceptions import OfferingNotFound
 from app.modules.offerings.application.output_ports import OfferingRepository
-from app.modules.providers.application.exceptions import (
-    ProviderAccessForbidden,
-    ProviderNotFound,
-)
+from app.modules.providers.application.exceptions import ProviderNotFound
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.shared.application.exceptions import UnitOfWorkConflict
 from app.shared.application.unit_of_work import UnitOfWork
@@ -192,22 +189,9 @@ class ListProviderAppointmentsUseCase:
     def __init__(
         self,
         *,
-        providers: ProviderRepository,
         appointments: AppointmentRepository,
     ) -> None:
-        self.providers = providers
         self.appointments = appointments
 
-    async def execute(
-        self,
-        provider_id: UUID,
-        current_provider_id: UUID,
-    ) -> list[Appointment]:
-        provider = await self.providers.get_by_id(provider_id)
-        if provider is None:
-            raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
-
-        if provider.id != current_provider_id:
-            raise ProviderAccessForbidden('provider access forbidden')
-
-        return await self.appointments.list_by_provider_id(provider.id)
+    async def execute(self, current_provider_id: UUID) -> list[Appointment]:
+        return await self.appointments.list_by_provider_id(current_provider_id)

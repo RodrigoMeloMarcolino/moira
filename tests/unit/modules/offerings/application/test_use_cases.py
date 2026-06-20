@@ -83,11 +83,9 @@ def unit_of_work_mock() -> Mock:
 @pytest.mark.asyncio
 async def test_create_offering_creates_offering_for_existing_provider() -> None:
     existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
     offerings = offering_repository_mock()
     unit_of_work = unit_of_work_mock()
     use_case = CreateOfferingUseCase(
-        providers=providers,
         offerings=offerings,
         unit_of_work=unit_of_work,
     )
@@ -98,13 +96,8 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
         price_cents=15000,
     )
 
-    created = await use_case.execute(
-        existing_provider.id,
-        payload,
-        existing_provider.id,
-    )
+    created = await use_case.execute(payload, existing_provider.id)
 
-    providers.get_by_id.assert_awaited_once_with(existing_provider.id)
     offerings.add.assert_awaited_once_with(created)
     unit_of_work.commit.assert_awaited_once_with()
     unit_of_work.refresh.assert_awaited_once_with(created)
@@ -117,45 +110,22 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_offering_raises_when_provider_is_missing() -> None:
-    missing_provider_id = uuid4()
-    providers = provider_repository_mock()
+async def test_create_offering_uses_current_provider_id_from_token() -> None:
+    current_provider_id = uuid4()
     offerings = offering_repository_mock()
     unit_of_work = unit_of_work_mock()
     use_case = CreateOfferingUseCase(
-        providers=providers,
         offerings=offerings,
         unit_of_work=unit_of_work,
     )
     payload = OfferingCreate(title='Consulta', duration_minutes=30)
 
-    with pytest.raises(ProviderNotFound):
-        await use_case.execute(missing_provider_id, payload, uuid4())
+    created = await use_case.execute(payload, current_provider_id)
 
-    providers.get_by_id.assert_awaited_once_with(missing_provider_id)
-    offerings.add.assert_not_awaited()
-    unit_of_work.commit.assert_not_awaited()
-    unit_of_work.refresh.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_create_offering_raises_when_provider_is_not_owned() -> None:
-    existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
-    offerings = offering_repository_mock()
-    unit_of_work = unit_of_work_mock()
-    use_case = CreateOfferingUseCase(
-        providers=providers,
-        offerings=offerings,
-        unit_of_work=unit_of_work,
-    )
-    payload = OfferingCreate(title='Consulta', duration_minutes=30)
-
-    with pytest.raises(ProviderAccessForbidden):
-        await use_case.execute(existing_provider.id, payload, uuid4())
-
-    offerings.add.assert_not_awaited()
-    unit_of_work.commit.assert_not_awaited()
+    offerings.add.assert_awaited_once_with(created)
+    unit_of_work.commit.assert_awaited_once_with()
+    unit_of_work.refresh.assert_awaited_once_with(created)
+    assert created.provider_id == current_provider_id
 
 
 @pytest.mark.asyncio
@@ -187,7 +157,6 @@ async def test_list_active_provider_offerings_raises_when_provider_is_missing() 
 
     with pytest.raises(ProviderNotFound):
         await use_case.execute('missing-provider')
-
     providers.get_by_slug.assert_awaited_once_with('missing-provider')
     offerings.list_active_by_provider_id.assert_not_awaited()
 
@@ -196,34 +165,28 @@ async def test_list_active_provider_offerings_raises_when_provider_is_missing() 
 async def test_list_provider_offerings_returns_owned_offerings() -> None:
     existing_provider = provider()
     expected_offering = offering(existing_provider.id)
-    providers = provider_repository_mock(provider_by_id=existing_provider)
     offerings = offering_repository_mock(active_offerings=[expected_offering])
     use_case = ListProviderOfferingsUseCase(
-        providers=providers,
         offerings=offerings,
     )
 
-    result = await use_case.execute(existing_provider.id, existing_provider.id)
+    result = await use_case.execute(existing_provider.id)
 
-    providers.get_by_id.assert_awaited_once_with(existing_provider.id)
     offerings.list_by_provider_id.assert_awaited_once_with(existing_provider.id)
     assert result == [expected_offering]
 
 
 @pytest.mark.asyncio
-async def test_list_provider_offerings_raises_when_provider_is_not_owned() -> None:
-    existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
+async def test_list_provider_offerings_uses_current_provider_id_from_token() -> None:
+    current_provider_id = uuid4()
     offerings = offering_repository_mock()
     use_case = ListProviderOfferingsUseCase(
-        providers=providers,
         offerings=offerings,
     )
 
-    with pytest.raises(ProviderAccessForbidden):
-        await use_case.execute(existing_provider.id, uuid4())
+    await use_case.execute(current_provider_id)
 
-    offerings.list_by_provider_id.assert_not_awaited()
+    offerings.list_by_provider_id.assert_awaited_once_with(current_provider_id)
 
 
 @pytest.mark.asyncio
