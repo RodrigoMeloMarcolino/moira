@@ -223,7 +223,6 @@ def build_create_offering_use_case(
     container: RequestContainerDep,
 ) -> CreateOfferingUseCase:
     return CreateOfferingUseCase(
-        providers=container.providers,
         offerings=container.offerings,
         unit_of_work=container.unit_of_work,
     )
@@ -242,7 +241,6 @@ def build_list_provider_offerings_use_case(
     container: RequestContainerDep,
 ) -> ListProviderOfferingsUseCase:
     return ListProviderOfferingsUseCase(
-        providers=container.providers,
         offerings=container.offerings,
     )
 
@@ -277,7 +275,6 @@ def build_create_provider_availability_use_case(
 ) -> CreateAvailabilityRuleUseCase:
     return CreateAvailabilityRuleUseCase(
         availability_rules=container.availability_rules,
-        providers=container.providers,
         uow=container.unit_of_work,
     )
 
@@ -287,7 +284,6 @@ def build_list_provider_availability_rules_use_case(
 ) -> ListProviderAvailabilityRulesUseCase:
     return ListProviderAvailabilityRulesUseCase(
         availability_rules=container.availability_rules,
-        providers=container.providers,
     )
 
 
@@ -311,7 +307,6 @@ def build_list_provider_appointments_use_case(
 ) -> ListProviderAppointmentsUseCase:
     return ListProviderAppointmentsUseCase(
         appointments=container.appointments,
-        providers=container.providers,
     )
 
 

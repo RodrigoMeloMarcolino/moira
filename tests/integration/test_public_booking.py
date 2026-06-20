@@ -15,7 +15,7 @@ def unique_phone() -> str:
 async def _create_bookable_provider(client: AsyncClient) -> tuple[dict, dict, dict]:
     provider, headers = await signup_authenticated_provider(client)
     offering_response = await client.post(
-        f'/v1/providers/{provider["id"]}/offerings',
+        '/v1/offerings',
         headers=headers,
         json={
             'title': 'Consulta',
@@ -25,7 +25,7 @@ async def _create_bookable_provider(client: AsyncClient) -> tuple[dict, dict, di
     assert offering_response.status_code == 201
 
     availability_response = await client.post(
-        f'/v1/providers/{provider["id"]}/availability-rules',
+        '/v1/availability-rules',
         headers=headers,
         json={
             'weekday': 3,
@@ -65,10 +65,7 @@ async def test_public_booking_reuses_same_idempotency_key_payload(
     assert second_response.status_code == 201
     assert second_response.json()['id'] == first_response.json()['id']
 
-    appointments_response = await client.get(
-        f'/v1/providers/{provider["id"]}/appointments',
-        headers=headers,
-    )
+    appointments_response = await client.get('/v1/appointments', headers=headers)
     assert appointments_response.status_code == 200
     assert [item['id'] for item in appointments_response.json()] == [
         first_response.json()['id']

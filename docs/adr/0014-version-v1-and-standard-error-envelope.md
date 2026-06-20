@@ -16,8 +16,10 @@ and authenticated provider administration.
 Expose the current API only under `/v1`.
 
 Use `/v1/public` for customer-facing public endpoints that do not require
-provider authentication. Use `/v1/providers/{provider_id}` and resource-specific
-administrative routes for provider-owned operations that require bearer auth.
+provider authentication. Use direct administrative resources under `/v1` for
+provider-owned operations that require bearer auth. In these routes, the
+provider target is inferred from the authenticated token instead of a
+`provider_id` path parameter.
 
 Return HTTP errors with a consistent envelope:
 
