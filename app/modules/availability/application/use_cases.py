@@ -30,27 +30,17 @@ class CreateAvailabilityRuleUseCase:
     def __init__(
         self,
         availability_rules: AvailabilityRuleRepository,
-        providers: ProviderRepository,
         uow: UnitOfWork,
     ) -> None:
         self.availability_rules = availability_rules
-        self.providers = providers
         self.uow = uow
 
     async def execute(
         self,
-        provider_id: UUID,
         payload: AvailabilityRuleCreate,
         current_provider_id: UUID,
     ) -> AvailabilityRule:
-        provider = await self.providers.get_by_id(provider_id)
-        if provider is None:
-            raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
-
-        if provider.id != current_provider_id:
-            raise ProviderAccessForbidden('provider access forbidden')
-
-        rule = AvailabilityRule(provider_id=provider_id, **payload.model_dump())
+        rule = AvailabilityRule(provider_id=current_provider_id, **payload.model_dump())
         await self.availability_rules.add(rule)
         await self.uow.commit()
         await self.uow.refresh(rule)
@@ -62,24 +52,11 @@ class ListProviderAvailabilityRulesUseCase:
     def __init__(
         self,
         availability_rules: AvailabilityRuleRepository,
-        providers: ProviderRepository,
     ) -> None:
         self.availability_rules = availability_rules
-        self.providers = providers
 
-    async def execute(
-        self,
-        provider_id: UUID,
-        current_provider_id: UUID,
-    ) -> list[AvailabilityRule]:
-        provider = await self.providers.get_by_id(provider_id)
-        if provider is None:
-            raise ProviderNotFound(f'provider not found by provider_id {provider_id}')
-
-        if provider.id != current_provider_id:
-            raise ProviderAccessForbidden('provider access forbidden')
-
-        return await self.availability_rules.list_by_provider(provider_id)
+    async def execute(self, current_provider_id: UUID) -> list[AvailabilityRule]:
+        return await self.availability_rules.list_by_provider(current_provider_id)
 
 
 class UpdateProviderAvailabilityRuleUseCase:

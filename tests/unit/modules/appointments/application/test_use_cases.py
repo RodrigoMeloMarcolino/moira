@@ -27,10 +27,6 @@ from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.infrastructure.models import Customer
 from app.modules.offerings.application.output_ports import OfferingRepository
 from app.modules.offerings.infrastructure.models import Offering
-from app.modules.providers.application.exceptions import (
-    ProviderAccessForbidden,
-    ProviderNotFound,
-)
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.modules.providers.infrastructure.models import Provider
 from app.shared.application.unit_of_work import UnitOfWork
@@ -282,51 +278,29 @@ async def test_booking_returns_existing_for_same_idempotency_key() -> None:
 async def test_list_provider_appointments_returns_owned_appointments() -> None:
     existing_provider = provider()
     expected_appointment = appointment(existing_provider.id, uuid4())
-    providers = provider_repository_mock(provider_by_id=existing_provider)
     appointments = appointment_repository_mock()
     appointments.list_by_provider_id = AsyncMock(return_value=[expected_appointment])
     use_case = ListProviderAppointmentsUseCase(
-        providers=providers,
         appointments=appointments,
     )
 
-    result = await use_case.execute(existing_provider.id, existing_provider.id)
+    result = await use_case.execute(existing_provider.id)
 
-    providers.get_by_id.assert_awaited_once_with(existing_provider.id)
     appointments.list_by_provider_id.assert_awaited_once_with(existing_provider.id)
     assert result == [expected_appointment]
 
 
 @pytest.mark.asyncio
-async def test_list_provider_appointments_raises_when_provider_is_missing() -> None:
-    missing_provider_id = uuid4()
-    providers = provider_repository_mock()
+async def test_list_provider_appointments_uses_current_provider_id_from_token() -> None:
+    current_provider_id = uuid4()
     appointments = appointment_repository_mock()
     use_case = ListProviderAppointmentsUseCase(
-        providers=providers,
         appointments=appointments,
     )
 
-    with pytest.raises(ProviderNotFound):
-        await use_case.execute(missing_provider_id, uuid4())
+    await use_case.execute(current_provider_id)
 
-    appointments.list_by_provider_id.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_list_provider_appointments_raises_when_provider_is_not_owned() -> None:
-    existing_provider = provider()
-    providers = provider_repository_mock(provider_by_id=existing_provider)
-    appointments = appointment_repository_mock()
-    use_case = ListProviderAppointmentsUseCase(
-        providers=providers,
-        appointments=appointments,
-    )
-
-    with pytest.raises(ProviderAccessForbidden):
-        await use_case.execute(existing_provider.id, uuid4())
-
-    appointments.list_by_provider_id.assert_not_awaited()
+    appointments.list_by_provider_id.assert_awaited_once_with(current_provider_id)
 
 
 @pytest.mark.asyncio

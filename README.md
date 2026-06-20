@@ -95,16 +95,16 @@ Rotas publicas para clientes finais ficam sob `/v1/public`, por exemplo:
 - `GET /v1/public/providers/{slug}/available-slots`
 - `POST /v1/public/providers/{slug}/appointments`
 
-Rotas administrativas autenticadas ficam sob `/v1/providers/{provider_id}` ou
-recursos administrativos diretos, por exemplo:
+Rotas administrativas autenticadas ficam sob recursos administrativos diretos.
+Nelas, o provider alvo e inferido do token bearer, por exemplo:
 
-- `POST /v1/providers/{provider_id}/offerings`
-- `GET /v1/providers/{provider_id}/offerings`
+- `POST /v1/offerings`
+- `GET /v1/offerings`
 - `PATCH /v1/offerings/{offering_id}`
-- `POST /v1/providers/{provider_id}/availability-rules`
-- `GET /v1/providers/{provider_id}/availability-rules`
+- `POST /v1/availability-rules`
+- `GET /v1/availability-rules`
 - `PATCH /v1/availability-rules/{rule_id}`
-- `GET /v1/providers/{provider_id}/appointments`
+- `GET /v1/appointments`
 
 Erros HTTP seguem o envelope:
 

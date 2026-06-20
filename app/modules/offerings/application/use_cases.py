@@ -15,28 +15,18 @@ from app.shared.application.unit_of_work import UnitOfWork
 class CreateOfferingUseCase:
     def __init__(
         self,
-        providers: ProviderRepository,
         offerings: OfferingRepository,
         unit_of_work: UnitOfWork,
     ) -> None:
-        self.providers = providers
         self.offerings = offerings
         self.unit_of_work = unit_of_work
 
     async def execute(
         self,
-        provider_id: UUID,
         payload: OfferingCreate,
         current_provider_id: UUID,
     ) -> Offering:
-        provider = await self.providers.get_by_id(provider_id)
-        if provider is None:
-            raise ProviderNotFound
-
-        if provider.id != current_provider_id:
-            raise ProviderAccessForbidden
-
-        offering = Offering(provider_id=provider.id, **payload.model_dump())
+        offering = Offering(provider_id=current_provider_id, **payload.model_dump())
         await self.offerings.add(offering)
         await self.unit_of_work.commit()
         await self.unit_of_work.refresh(offering)
@@ -64,25 +54,12 @@ class ListActiveProviderOfferingsUseCase:
 class ListProviderOfferingsUseCase:
     def __init__(
         self,
-        providers: ProviderRepository,
         offerings: OfferingRepository,
     ) -> None:
-        self.providers = providers
         self.offerings = offerings
 
-    async def execute(
-        self,
-        provider_id: UUID,
-        current_provider_id: UUID,
-    ) -> list[Offering]:
-        provider = await self.providers.get_by_id(provider_id)
-        if provider is None:
-            raise ProviderNotFound
-
-        if provider.id != current_provider_id:
-            raise ProviderAccessForbidden
-
-        return await self.offerings.list_by_provider_id(provider.id)
+    async def execute(self, current_provider_id: UUID) -> list[Offering]:
+        return await self.offerings.list_by_provider_id(current_provider_id)
 
 
 class UpdateOfferingUseCase:

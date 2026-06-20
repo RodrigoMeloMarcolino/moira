@@ -31,56 +31,31 @@ availability_router = APIRouter(tags=['availability'])
 
 
 @availability_router.post(
-    '/providers/{provider_id}/availability-rules',
+    '/availability-rules',
     response_model=AvailabilityRulePublic,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_provider_availability(
-    provider_id: UUID,
     payload: AvailabilityRuleCreate,
     use_case: CreateAvailabilityRuleUseCaseDep,
     current_provider: CurrentProviderDep,
 ) -> AvailabilityRule:
-    try:
-        return await use_case.execute(
-            provider_id=provider_id,
-            payload=payload,
-            current_provider_id=current_provider.id,
-        )
-    except ProviderNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='provider not found',
-        ) from exc
-    except ProviderAccessForbidden as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='provider access forbidden',
-        ) from exc
+    return await use_case.execute(
+        payload=payload,
+        current_provider_id=current_provider.id,
+    )
 
 
 @availability_router.get(
-    '/providers/{provider_id}/availability-rules',
+    '/availability-rules',
     response_model=list[AvailabilityRulePublic],
     status_code=status.HTTP_200_OK,
 )
 async def list_provider_availability_rules(
-    provider_id: UUID,
     use_case: ListProviderAvailabilityRulesUseCaseDep,
     current_provider: CurrentProviderDep,
 ) -> list[AvailabilityRule]:
-    try:
-        return await use_case.execute(provider_id, current_provider.id)
-    except ProviderNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='provider not found',
-        ) from exc
-    except ProviderAccessForbidden as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='provider access forbidden',
-        ) from exc
+    return await use_case.execute(current_provider.id)
 
 
 @availability_router.patch(
