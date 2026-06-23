@@ -28,6 +28,20 @@ class Settings(BaseSettings):
     password_hash_scheme: str = Field(default='bcrypt', alias='PASSWORD_HASH_SCHEME')
     default_timezone: str = Field(default='America/Fortaleza', alias='DEFAULT_TIMEZONE')
     log_level: str = Field(default='INFO', alias='LOG_LEVEL')
+    cache_enabled: bool = Field(default=True, alias='CACHE_ENABLED')
+    redis_url: str = Field(default='redis://localhost:6379/0', alias='REDIS_URL')
+    cache_ttl_public_provider_seconds: int = Field(
+        default=1800,
+        alias='CACHE_TTL_PUBLIC_PROVIDER_SECONDS',
+    )
+    cache_ttl_public_offerings_seconds: int = Field(
+        default=600,
+        alias='CACHE_TTL_PUBLIC_OFFERINGS_SECONDS',
+    )
+    cache_ttl_available_slots_seconds: int = Field(
+        default=30,
+        alias='CACHE_TTL_AVAILABLE_SLOTS_SECONDS',
+    )
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias='CORS_ALLOWED_ORIGINS'
     )

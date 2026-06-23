@@ -9,7 +9,8 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_FILE = ROOT / 'docker-compose.test.yaml'
-SERVICE_NAME = 'postgres-test'
+POSTGRES_SERVICE_NAME = 'postgres-test'
+REDIS_SERVICE_NAME = 'redis-test'
 POSTGRES_USER = 'moira'
 POSTGRES_PASSWORD = 'moira'
 POSTGRES_DB = 'moira_test'
@@ -46,29 +47,33 @@ def _capture(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _host_port(project_name: str) -> str:
-    result = _capture(_compose_command(project_name, 'port', SERVICE_NAME, '5432'))
+def _host_port(project_name: str, service_name: str, container_port: str) -> str:
+    result = _capture(
+        _compose_command(project_name, 'port', service_name, container_port)
+    )
     mapping = result.stdout.strip().splitlines()[0]
     return mapping.rsplit(':', maxsplit=1)[-1]
 
 
-def _wait_until_ready(project_name: str) -> None:
-    deadline = time.monotonic() + 30
-    command = _compose_command(
+def _wait_until_ready(
+    project_name: str,
+    *,
+    service_name: str,
+    command: list[str],
+    timeout_seconds: int = 30,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    compose_command = _compose_command(
         project_name,
         'exec',
         '-T',
-        SERVICE_NAME,
-        'pg_isready',
-        '-U',
-        POSTGRES_USER,
-        '-d',
-        POSTGRES_DB,
+        service_name,
+        *command,
     )
 
     while time.monotonic() < deadline:
         result = subprocess.run(
-            command,
+            compose_command,
             cwd=ROOT,
             check=False,
             capture_output=True,
@@ -79,18 +84,22 @@ def _wait_until_ready(project_name: str) -> None:
 
         time.sleep(0.5)
 
-    raise RuntimeError('Timed out waiting for PostgreSQL integration test container')
+    raise RuntimeError(
+        f'Timed out waiting for `{service_name}` integration test container'
+    )
 
 
-def _integration_env(host_port: str) -> dict[str, str]:
+def _integration_env(postgres_port: str, redis_port: str) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
             'APP_ENV': 'test',
             'DATABASE_URL': (
                 f'postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}'
-                f'@localhost:{host_port}/{POSTGRES_DB}'
+                f'@localhost:{postgres_port}/{POSTGRES_DB}'
             ),
+            'CACHE_ENABLED': '1',
+            'REDIS_URL': f'redis://localhost:{redis_port}/0',
             'JWT_SECRET_KEY': 'integration-test-secret-at-least-32-bytes',
             'MOIRA_ALLOW_INTEGRATION_DATABASE': '1',
         }
@@ -106,9 +115,29 @@ def main() -> int:
     pytest_args = sys.argv[1:]
 
     try:
-        _run(_compose_command(project_name, 'up', '-d', SERVICE_NAME))
-        _wait_until_ready(project_name)
-        env = _integration_env(_host_port(project_name))
+        _run(
+            _compose_command(
+                project_name,
+                'up',
+                '-d',
+                POSTGRES_SERVICE_NAME,
+                REDIS_SERVICE_NAME,
+            )
+        )
+        _wait_until_ready(
+            project_name,
+            service_name=POSTGRES_SERVICE_NAME,
+            command=['pg_isready', '-U', POSTGRES_USER, '-d', POSTGRES_DB],
+        )
+        _wait_until_ready(
+            project_name,
+            service_name=REDIS_SERVICE_NAME,
+            command=['redis-cli', 'ping'],
+        )
+        env = _integration_env(
+            _host_port(project_name, POSTGRES_SERVICE_NAME, '5432'),
+            _host_port(project_name, REDIS_SERVICE_NAME, '6379'),
+        )
 
         _run([sys.executable, '-m', 'alembic', 'upgrade', 'head'], env=env)
         tests = _run(

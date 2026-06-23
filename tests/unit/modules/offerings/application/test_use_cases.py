@@ -4,16 +4,23 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from app.modules.availability.application.public_cache import PublicAvailabilityCache
 from app.modules.offerings.application.exceptions import OfferingNotFound
 from app.modules.offerings.application.output_ports import OfferingRepository
+from app.modules.offerings.application.public_cache import PublicOfferingsCache
 from app.modules.offerings.application.use_cases import (
     CreateOfferingUseCase,
     ListActiveProviderOfferingsUseCase,
     ListProviderOfferingsUseCase,
+    ListPublicProviderOfferingsUseCase,
     UpdateOfferingUseCase,
 )
 from app.modules.offerings.infrastructure.models import Offering
-from app.modules.offerings.schemas.catalog import OfferingCreate, OfferingUpdate
+from app.modules.offerings.schemas.catalog import (
+    OfferingCreate,
+    OfferingPublic,
+    OfferingUpdate,
+)
 from app.modules.providers.application.exceptions import (
     ProviderAccessForbidden,
     ProviderNotFound,
@@ -80,14 +87,30 @@ def unit_of_work_mock() -> Mock:
     return unit_of_work
 
 
+def public_offerings_cache_mock() -> Mock:
+    cache = Mock(spec=PublicOfferingsCache)
+    cache.get = AsyncMock(return_value=None)
+    cache.set = AsyncMock()
+    cache.invalidate = AsyncMock()
+    return cache
+
+
+def public_availability_cache_mock() -> Mock:
+    cache = Mock(spec=PublicAvailabilityCache)
+    cache.bump_schedule_version = AsyncMock(return_value=2)
+    return cache
+
+
 @pytest.mark.asyncio
 async def test_create_offering_creates_offering_for_existing_provider() -> None:
     existing_provider = provider()
     offerings = offering_repository_mock()
     unit_of_work = unit_of_work_mock()
+    public_offerings_cache = public_offerings_cache_mock()
     use_case = CreateOfferingUseCase(
         offerings=offerings,
         unit_of_work=unit_of_work,
+        public_offerings_cache=public_offerings_cache,
     )
     payload = OfferingCreate(
         title='Consulta',
@@ -100,6 +123,7 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
 
     offerings.add.assert_awaited_once_with(created)
     unit_of_work.commit.assert_awaited_once_with()
+    public_offerings_cache.invalidate.assert_awaited_once_with(existing_provider.id)
     unit_of_work.refresh.assert_awaited_once_with(created)
     assert created.provider_id == existing_provider.id
     assert created.title == 'Consulta'
@@ -144,6 +168,49 @@ async def test_list_active_provider_offerings_returns_offerings() -> None:
     providers.get_by_slug.assert_awaited_once_with('provider-test')
     offerings.list_active_by_provider_id.assert_awaited_once_with(existing_provider.id)
     assert result == [expected_offering]
+
+
+@pytest.mark.asyncio
+async def test_list_public_provider_offerings_returns_cached_payload() -> None:
+    existing_provider = provider()
+    public_cache = public_offerings_cache_mock()
+    cached_offering = OfferingPublic(
+        id=uuid4(),
+        provider_id=existing_provider.id,
+        title='Consulta',
+        description='Atendimento inicial',
+        duration_minutes=30,
+        price_cents=15000,
+        is_active=True,
+    )
+    public_cache.get = AsyncMock(return_value=[cached_offering])
+    use_case = ListPublicProviderOfferingsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(),
+        public_cache=public_cache,
+    )
+
+    result = await use_case.execute(existing_provider.slug)
+
+    assert result == [cached_offering]
+    public_cache.set.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_public_provider_offerings_caches_fresh_payload() -> None:
+    existing_provider = provider()
+    expected_offering = offering(existing_provider.id)
+    public_cache = public_offerings_cache_mock()
+    use_case = ListPublicProviderOfferingsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(active_offerings=[expected_offering]),
+        public_cache=public_cache,
+    )
+
+    result = await use_case.execute(existing_provider.slug)
+
+    assert [item.title for item in result] == ['Consulta']
+    public_cache.set.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -194,9 +261,13 @@ async def test_update_offering_updates_only_sent_fields() -> None:
     existing_offering = offering(uuid4())
     offerings = offering_repository_mock(offering_by_id=existing_offering)
     unit_of_work = unit_of_work_mock()
+    public_offerings_cache = public_offerings_cache_mock()
+    public_availability_cache = public_availability_cache_mock()
     use_case = UpdateOfferingUseCase(
         offerings=offerings,
         unit_of_work=unit_of_work,
+        public_offerings_cache=public_offerings_cache,
+        public_availability_cache=public_availability_cache,
     )
     payload = OfferingUpdate(title='Consulta atualizada', is_active=False)
 
@@ -208,6 +279,12 @@ async def test_update_offering_updates_only_sent_fields() -> None:
 
     offerings.get_by_id.assert_awaited_once_with(existing_offering.id)
     unit_of_work.commit.assert_awaited_once_with()
+    public_offerings_cache.invalidate.assert_awaited_once_with(
+        existing_offering.provider_id
+    )
+    public_availability_cache.bump_schedule_version.assert_awaited_once_with(
+        existing_offering.provider_id
+    )
     unit_of_work.refresh.assert_awaited_once_with(updated)
     assert updated is existing_offering
     assert updated.title == 'Consulta atualizada'
@@ -252,3 +329,31 @@ async def test_update_offering_raises_when_offering_is_not_owned() -> None:
 
     unit_of_work.commit.assert_not_awaited()
     unit_of_work.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_offering_does_not_bump_schedule_for_catalog_only_changes() -> (
+    None
+):
+    existing_offering = offering(uuid4())
+    offerings = offering_repository_mock(offering_by_id=existing_offering)
+    unit_of_work = unit_of_work_mock()
+    public_offerings_cache = public_offerings_cache_mock()
+    public_availability_cache = public_availability_cache_mock()
+    use_case = UpdateOfferingUseCase(
+        offerings=offerings,
+        unit_of_work=unit_of_work,
+        public_offerings_cache=public_offerings_cache,
+        public_availability_cache=public_availability_cache,
+    )
+
+    await use_case.execute(
+        existing_offering.id,
+        OfferingUpdate(title='Novo titulo'),
+        existing_offering.provider_id,
+    )
+
+    public_offerings_cache.invalidate.assert_awaited_once_with(
+        existing_offering.provider_id
+    )
+    public_availability_cache.bump_schedule_version.assert_not_awaited()

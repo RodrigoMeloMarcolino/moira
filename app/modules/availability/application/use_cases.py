@@ -11,6 +11,7 @@ from app.modules.appointments.domain.slots import (
 )
 from app.modules.availability.application.exceptions import AvailabilityNotFound
 from app.modules.availability.application.output_ports import AvailabilityRuleRepository
+from app.modules.availability.application.public_cache import PublicAvailabilityCache
 from app.modules.availability.infrastructure.models import AvailabilityRule
 from app.modules.availability.schemas.availability_rules import (
     AvailabilityRuleCreate,
@@ -31,9 +32,11 @@ class CreateAvailabilityRuleUseCase:
         self,
         availability_rules: AvailabilityRuleRepository,
         uow: UnitOfWork,
+        public_availability_cache: PublicAvailabilityCache | None = None,
     ) -> None:
         self.availability_rules = availability_rules
         self.uow = uow
+        self.public_availability_cache = public_availability_cache
 
     async def execute(
         self,
@@ -43,6 +46,10 @@ class CreateAvailabilityRuleUseCase:
         rule = AvailabilityRule(provider_id=current_provider_id, **payload.model_dump())
         await self.availability_rules.add(rule)
         await self.uow.commit()
+        if self.public_availability_cache is not None:
+            await self.public_availability_cache.bump_schedule_version(
+                current_provider_id
+            )
         await self.uow.refresh(rule)
 
         return rule
@@ -64,9 +71,11 @@ class UpdateProviderAvailabilityRuleUseCase:
         self,
         availability_rules: AvailabilityRuleRepository,
         uow: UnitOfWork,
+        public_availability_cache: PublicAvailabilityCache | None = None,
     ) -> None:
         self.availability_rules = availability_rules
         self.uow = uow
+        self.public_availability_cache = public_availability_cache
 
     async def execute(
         self,
@@ -85,6 +94,10 @@ class UpdateProviderAvailabilityRuleUseCase:
             setattr(rule, field, value)
 
         await self.uow.commit()
+        if self.public_availability_cache is not None:
+            await self.public_availability_cache.bump_schedule_version(
+                current_provider_id
+            )
         await self.uow.refresh(rule)
 
         return rule
@@ -141,7 +154,8 @@ class ListProviderAvailableSlotsUseCase:
         )
 
         occupied_slots_starts = {
-            occupied_slot.slot_start_at for occupied_slot in occupied_slots
+            self._normalize_slot_start(occupied_slot.slot_start_at)
+            for occupied_slot in occupied_slots
         }
 
         available_starts: list[datetime] = []
@@ -169,3 +183,78 @@ class ListProviderAvailableSlotsUseCase:
                     available_starts.append(candidate_start)
 
         return sorted(available_starts)
+
+    def _normalize_slot_start(self, slot_start_at: datetime) -> datetime:
+        if slot_start_at.tzinfo is None:
+            return slot_start_at
+
+        return slot_start_at.replace(tzinfo=None)
+
+
+class ListPublicProviderAvailableSlotsUseCase:
+    def __init__(
+        self,
+        providers: ProviderRepository,
+        offerings: OfferingRepository,
+        list_provider_available_slots: ListProviderAvailableSlotsUseCase,
+        public_cache: PublicAvailabilityCache | None = None,
+    ) -> None:
+        self.providers = providers
+        self.offerings = offerings
+        self.list_provider_available_slots = list_provider_available_slots
+        self.public_cache = public_cache
+
+    async def execute(
+        self,
+        provider_slug: str,
+        offering_id: UUID,
+        target_date: date,
+    ) -> list[datetime]:
+        provider = await self.providers.get_by_slug(provider_slug)
+        if provider is None:
+            raise ProviderNotFound(
+                f'provider_id not found by provider_slug {provider_slug}'
+            )
+
+        offering = await self.offerings.get_active_by_id(offering_id)
+        if offering is None:
+            raise OfferingNotFound(f'offering not found by offering_id {offering_id}')
+
+        if provider.id != offering.provider_id:
+            raise OfferingDoesNotBelongToProvider(
+                'the requested offering does not belong to this provider'
+            )
+
+        if self.public_cache is not None:
+            schedule_version = await self.public_cache.get_schedule_version(provider.id)
+            day_version = await self.public_cache.get_day_version(
+                provider.id,
+                target_date,
+            )
+            cached_slots = await self.public_cache.get_slots(
+                provider.id,
+                offering_id,
+                target_date,
+                schedule_version,
+                day_version,
+            )
+            if cached_slots is not None:
+                return cached_slots
+
+        available_slots = await self.list_provider_available_slots.execute(
+            provider_slug=provider_slug,
+            offering_id=offering_id,
+            target_date=target_date,
+        )
+
+        if self.public_cache is not None:
+            await self.public_cache.set_slots(
+                provider.id,
+                offering_id,
+                target_date,
+                schedule_version,
+                day_version,
+                available_slots,
+            )
+
+        return available_slots

@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.deps import (
     CreateOfferingUseCaseDep,
     CurrentProviderDep,
-    ListActiveProviderOfferingsUseCaseDep,
     ListProviderOfferingsUseCaseDep,
+    ListPublicProviderOfferingsUseCaseDep,
     UpdateOfferingUseCaseDep,
 )
 from app.modules.offerings.application.exceptions import OfferingNotFound
@@ -43,8 +43,8 @@ async def create_offering(
 )
 async def list_active_provider_offerings(
     slug: str,
-    use_case: ListActiveProviderOfferingsUseCaseDep,
-) -> list[Offering]:
+    use_case: ListPublicProviderOfferingsUseCaseDep,
+) -> list[OfferingPublic]:
     try:
         return await use_case.execute(slug)
     except ProviderNotFound as exc:

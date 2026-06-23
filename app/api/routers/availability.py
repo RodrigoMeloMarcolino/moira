@@ -8,7 +8,7 @@ from app.api.deps import (
     CreateAvailabilityRuleUseCaseDep,
     CurrentProviderDep,
     ListProviderAvailabilityRulesUseCaseDep,
-    ListProviderAvailableSlotsUseCaseDep,
+    ListPublicProviderAvailableSlotsUseCaseDep,
     UpdateProviderAvailabilityRuleUseCaseDep,
 )
 from app.modules.appointments.application.exceptions import (
@@ -89,7 +89,7 @@ async def update_provider_availability_rule(
 )
 async def list_provider_available_slots(
     provider_slug: str,
-    use_case: ListProviderAvailableSlotsUseCaseDep,
+    use_case: ListPublicProviderAvailableSlotsUseCaseDep,
     offering_id: Annotated[UUID, Query()],
     target_date: Annotated[date, Query(alias='date')],
 ) -> list[datetime]:

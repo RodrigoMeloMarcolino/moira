@@ -5,9 +5,13 @@ from app.modules.providers.application.exceptions import (
     ProviderSignupConflict,
 )
 from app.modules.providers.application.output_ports import ProviderRepository
+from app.modules.providers.application.public_cache import ProviderCatalogCache
 from app.modules.providers.domain.slug import generate_provider_slug
 from app.modules.providers.infrastructure.models import Provider
-from app.modules.providers.schemas.catalog import ProviderSignupCreate
+from app.modules.providers.schemas.catalog import (
+    ProviderCatalogPublic,
+    ProviderSignupCreate,
+)
 from app.modules.users.application.exceptions import UserEmailAlreadyExists
 from app.modules.users.application.input_ports import UserCreator
 from app.shared.application.exceptions import UnitOfWorkConflict
@@ -81,3 +85,29 @@ class GetProviderBySlugUseCase:
             raise ProviderNotFound
 
         return provider
+
+
+class GetPublicProviderBySlugUseCase:
+    def __init__(
+        self,
+        providers: ProviderRepository,
+        public_cache: ProviderCatalogCache | None = None,
+    ) -> None:
+        self.providers = providers
+        self.public_cache = public_cache
+
+    async def execute(self, slug: str) -> ProviderCatalogPublic:
+        if self.public_cache is not None:
+            cached_provider = await self.public_cache.get(slug)
+            if cached_provider is not None:
+                return cached_provider
+
+        provider = await self.providers.get_by_slug(slug)
+        if provider is None:
+            raise ProviderNotFound
+
+        public_provider = ProviderCatalogPublic.model_validate(provider)
+        if self.public_cache is not None:
+            await self.public_cache.set(public_provider)
+
+        return public_provider

@@ -11,7 +11,17 @@ services:
     volumes: 
      - "moira_postgres_data:/var/lib/postgresql/data"
     healthcheck:
-      test: [CMD-SHELL, "pq_isready -U moira -d moira"]
+      test: [CMD-SHELL, "pg_isready -U moira -d moira"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    container_name: moira-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10

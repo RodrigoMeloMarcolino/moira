@@ -36,10 +36,10 @@ Crie o arquivo de ambiente local:
 Copy-Item .env.example .env
 ```
 
-Suba o PostgreSQL:
+Suba o PostgreSQL e o Redis local:
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 Aplique migrations:
@@ -152,7 +152,7 @@ uv run python scripts/run_integration_tests.py
 ```
 
 Os testes de integracao exigem Docker disponivel. O alvo `make test-integration`
-usa `docker-compose.test.yaml` para subir um PostgreSQL efemero, aplica as
+usa `docker-compose.test.yaml` para subir um PostgreSQL e um Redis efemeros, aplica as
 migrations, executa `pytest -m integration` e remove o container e volumes ao
 final da suite. O container local `moira-postgres`, usado via Docker Compose
 para desenvolvimento, nao e reutilizado nem alterado pelos testes.

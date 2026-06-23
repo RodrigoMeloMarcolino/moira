@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -24,6 +24,7 @@ from app.modules.appointments.schemas.booking import PublicAppointmentBookingCre
 from app.modules.availability.application.input_ports import (
     ProviderAvailableSlotsRetriever,
 )
+from app.modules.availability.application.public_cache import PublicAvailabilityCache
 from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.infrastructure.models import Customer
 from app.modules.offerings.application.output_ports import OfferingRepository
@@ -159,6 +160,13 @@ def unit_of_work_mock() -> Mock:
     return unit_of_work
 
 
+def public_availability_cache_mock() -> Mock:
+    cache = Mock(spec=PublicAvailabilityCache)
+    cache.invalidate_slots = AsyncMock()
+    cache.bump_day_version = AsyncMock(return_value=2)
+    return cache
+
+
 def build_use_case(
     *,
     appointments: Optional[Mock] = None,
@@ -168,6 +176,7 @@ def build_use_case(
     get_or_create_customer_by_phone: Optional[Mock] = None,
     list_provider_available_slots: Optional[Mock] = None,
     uow: Optional[Mock] = None,
+    public_availability_cache: Optional[Mock] = None,
 ) -> BookPublicAppointmentUseCase:
     return BookPublicAppointmentUseCase(
         appointments=appointments or appointment_repository_mock(),
@@ -182,6 +191,7 @@ def build_use_case(
             or available_slots_retriever_mock(available_starts=[])
         ),
         uow=uow or unit_of_work_mock(),
+        public_availability_cache=public_availability_cache,
     )
 
 
@@ -189,7 +199,8 @@ def build_use_case(
 async def test_book_public_appointment_checks_availability_then_books() -> None:
     provider_id = uuid4()
     start_at = datetime(2026, 6, 10, 9, 0, 42, 123456)
-    expected_start_at = datetime(2026, 6, 10, 9, 0)
+    expected_requested_start_at = datetime(2026, 6, 10, 9, 0)
+    expected_persisted_start_at = datetime(2026, 6, 10, 9, 0, tzinfo=UTC)
     existing_offering = offering(provider_id, duration_minutes=30)
     existing_customer = customer()
     appointments = appointment_repository_mock()
@@ -198,9 +209,10 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
         returned_customer=existing_customer,
     )
     available_slots = available_slots_retriever_mock(
-        available_starts=[expected_start_at],
+        available_starts=[expected_requested_start_at],
     )
     unit_of_work = unit_of_work_mock()
+    public_availability_cache = public_availability_cache_mock()
     use_case = build_use_case(
         appointments=appointments,
         offerings=offering_repository_mock(active_offering=existing_offering),
@@ -209,6 +221,7 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
         get_or_create_customer_by_phone=customer_creator_getter,
         list_provider_available_slots=available_slots,
         uow=unit_of_work,
+        public_availability_cache=public_availability_cache,
     )
     payload = booking_payload(existing_offering.id, start_at=start_at)
 
@@ -217,18 +230,27 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
     available_slots.execute.assert_awaited_once_with(
         provider_slug='provider-test',
         offering_id=existing_offering.id,
-        target_date=expected_start_at.date(),
+        target_date=expected_requested_start_at.date(),
     )
     customer_creator_getter.execute.assert_awaited_once()
     appointments.add.assert_awaited_once_with(appointment)
     appointment_slots.add_many.assert_awaited_once()
     unit_of_work.commit.assert_awaited_once_with()
+    public_availability_cache.invalidate_slots.assert_awaited_once_with(
+        provider_id,
+        existing_offering.id,
+        expected_requested_start_at.date(),
+    )
+    public_availability_cache.bump_day_version.assert_awaited_once_with(
+        provider_id,
+        expected_requested_start_at.date(),
+    )
     unit_of_work.refresh.assert_awaited_once_with(appointment)
     assert appointment.provider_id == provider_id
     assert appointment.offering_id == existing_offering.id
     assert appointment.customer_id == existing_customer.id
-    assert appointment.start_at == expected_start_at
-    assert appointment.end_at == expected_start_at + timedelta(minutes=30)
+    assert appointment.start_at == expected_persisted_start_at
+    assert appointment.end_at == expected_persisted_start_at + timedelta(minutes=30)
     assert appointment.duration_minutes_snapshot == 30
     assert appointment.status == 'scheduled'
     assert appointment.customer_notes == 'Please call before the appointment.'
@@ -236,8 +258,8 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
     added_slots = appointment_slots.add_many.await_args.args[0]
     assert all(isinstance(slot, AppointmentSlot) for slot in added_slots)
     assert [slot.slot_start_at for slot in added_slots] == [
-        expected_start_at,
-        expected_start_at + timedelta(minutes=15),
+        expected_persisted_start_at,
+        expected_persisted_start_at + timedelta(minutes=15),
     ]
     assert all(slot.provider_id == provider_id for slot in added_slots)
 

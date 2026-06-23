@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -12,10 +12,12 @@ from app.modules.appointments.application.output_ports import AppointmentSlotRep
 from app.modules.appointments.infrastructure.models import AppointmentSlot
 from app.modules.availability.application.exceptions import AvailabilityNotFound
 from app.modules.availability.application.output_ports import AvailabilityRuleRepository
+from app.modules.availability.application.public_cache import PublicAvailabilityCache
 from app.modules.availability.application.use_cases import (
     CreateAvailabilityRuleUseCase,
     ListProviderAvailabilityRulesUseCase,
     ListProviderAvailableSlotsUseCase,
+    ListPublicProviderAvailableSlotsUseCase,
     UpdateProviderAvailabilityRuleUseCase,
 )
 from app.modules.availability.infrastructure.models import AvailabilityRule
@@ -139,14 +141,26 @@ def unit_of_work_mock() -> Mock:
     return unit_of_work
 
 
+def public_availability_cache_mock() -> Mock:
+    cache = Mock(spec=PublicAvailabilityCache)
+    cache.bump_schedule_version = AsyncMock(return_value=2)
+    cache.get_schedule_version = AsyncMock(return_value=1)
+    cache.get_day_version = AsyncMock(return_value=1)
+    cache.get_slots = AsyncMock(return_value=None)
+    cache.set_slots = AsyncMock()
+    return cache
+
+
 @pytest.mark.asyncio
 async def test_create_availability_rule_creates_rule_for_existing_provider() -> None:
     existing_provider = provider()
     rules = availability_rule_repository_mock()
     unit_of_work = unit_of_work_mock()
+    public_availability_cache = public_availability_cache_mock()
     use_case = CreateAvailabilityRuleUseCase(
         availability_rules=rules,
         uow=unit_of_work,
+        public_availability_cache=public_availability_cache,
     )
     payload = AvailabilityRuleCreate(
         weekday=3,
@@ -158,6 +172,9 @@ async def test_create_availability_rule_creates_rule_for_existing_provider() -> 
 
     rules.add.assert_awaited_once_with(created)
     unit_of_work.commit.assert_awaited_once_with()
+    public_availability_cache.bump_schedule_version.assert_awaited_once_with(
+        existing_provider.id
+    )
     unit_of_work.refresh.assert_awaited_once_with(created)
     assert created.provider_id == existing_provider.id
     assert created.weekday == 3
@@ -222,9 +239,11 @@ async def test_update_provider_availability_rule_updates_only_sent_fields() -> N
     existing_rule = availability_rule(uuid4())
     rules = availability_rule_repository_mock(rule_by_id=existing_rule)
     unit_of_work = unit_of_work_mock()
+    public_availability_cache = public_availability_cache_mock()
     use_case = UpdateProviderAvailabilityRuleUseCase(
         availability_rules=rules,
         uow=unit_of_work,
+        public_availability_cache=public_availability_cache,
     )
     payload = AvailabilityRuleUpdate(end_time=time(13, 0), is_active=False)
 
@@ -236,6 +255,9 @@ async def test_update_provider_availability_rule_updates_only_sent_fields() -> N
 
     rules.get_by_id.assert_awaited_once_with(existing_rule.id)
     unit_of_work.commit.assert_awaited_once_with()
+    public_availability_cache.bump_schedule_version.assert_awaited_once_with(
+        existing_rule.provider_id
+    )
     unit_of_work.refresh.assert_awaited_once_with(updated)
     assert updated is existing_rule
     assert updated.weekday == 3
@@ -330,6 +352,63 @@ async def test_list_provider_available_slots_returns_free_starts_sorted() -> Non
 
 
 @pytest.mark.asyncio
+async def test_list_public_provider_available_slots_returns_cached_slots() -> None:
+    existing_provider = provider()
+    existing_offering = offering(existing_provider.id, duration_minutes=60)
+    public_cache = public_availability_cache_mock()
+    public_cache.get_slots = AsyncMock(return_value=[datetime(2026, 6, 10, 9, 0)])
+    fresh_use_case = Mock(spec=ListProviderAvailableSlotsUseCase)
+    fresh_use_case.execute = AsyncMock()
+    use_case = ListPublicProviderAvailableSlotsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        list_provider_available_slots=fresh_use_case,
+        public_cache=public_cache,
+    )
+
+    result = await use_case.execute(
+        provider_slug=existing_provider.slug,
+        offering_id=existing_offering.id,
+        target_date=date(2026, 6, 10),
+    )
+
+    assert result == [datetime(2026, 6, 10, 9, 0)]
+    fresh_use_case.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_public_provider_available_slots_caches_fresh_slots() -> None:
+    existing_provider = provider()
+    existing_offering = offering(existing_provider.id, duration_minutes=60)
+    public_cache = public_availability_cache_mock()
+    fresh_slots = [datetime(2026, 6, 10, 9, 0)]
+    fresh_use_case = Mock(spec=ListProviderAvailableSlotsUseCase)
+    fresh_use_case.execute = AsyncMock(return_value=fresh_slots)
+    use_case = ListPublicProviderAvailableSlotsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        list_provider_available_slots=fresh_use_case,
+        public_cache=public_cache,
+    )
+
+    result = await use_case.execute(
+        provider_slug=existing_provider.slug,
+        offering_id=existing_offering.id,
+        target_date=date(2026, 6, 10),
+    )
+
+    assert result == fresh_slots
+    public_cache.set_slots.assert_awaited_once_with(
+        existing_provider.id,
+        existing_offering.id,
+        date(2026, 6, 10),
+        1,
+        1,
+        fresh_slots,
+    )
+
+
+@pytest.mark.asyncio
 async def test_list_available_slots_removes_partially_conflicting_starts() -> None:
     existing_provider = provider()
     existing_offering = offering(existing_provider.id, duration_minutes=60)
@@ -341,6 +420,35 @@ async def test_list_available_slots_removes_partially_conflicting_starts() -> No
     occupied = appointment_slot(
         existing_provider.id,
         datetime(2026, 6, 10, 10, 0),
+    )
+    use_case = ListProviderAvailableSlotsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        rules=availability_rule_repository_mock(active_rules=[rule]),
+        appointment_slots=appointment_slot_repository_mock(occupied_slots=[occupied]),
+    )
+
+    result = await use_case.execute(
+        provider_slug=existing_provider.slug,
+        offering_id=existing_offering.id,
+        target_date=date(2026, 6, 10),
+    )
+
+    assert result == [datetime(2026, 6, 10, 9, 0)]
+
+
+@pytest.mark.asyncio
+async def test_list_available_slots_normalizes_timezone_aware_occupied_slots() -> None:
+    existing_provider = provider()
+    existing_offering = offering(existing_provider.id, duration_minutes=60)
+    rule = availability_rule(
+        existing_provider.id,
+        start_time=time(9, 0),
+        end_time=time(11, 0),
+    )
+    occupied = appointment_slot(
+        existing_provider.id,
+        datetime(2026, 6, 10, 10, 0, tzinfo=UTC),
     )
     use_case = ListProviderAvailableSlotsUseCase(
         providers=provider_repository_mock(provider_by_slug=existing_provider),
