@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
@@ -196,7 +197,10 @@ def build_use_case(
 
 
 @pytest.mark.asyncio
-async def test_book_public_appointment_checks_availability_then_books() -> None:
+async def test_book_public_appointment_checks_availability_then_books(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     provider_id = uuid4()
     start_at = datetime(2026, 6, 10, 9, 0, 42, 123456)
     expected_requested_start_at = datetime(2026, 6, 10, 9, 0)
@@ -262,10 +266,16 @@ async def test_book_public_appointment_checks_availability_then_books() -> None:
         expected_persisted_start_at + timedelta(minutes=15),
     ]
     assert all(slot.provider_id == provider_id for slot in added_slots)
+    assert 'appointment.booking_succeeded' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
-async def test_booking_returns_existing_for_same_idempotency_key() -> None:
+async def test_booking_returns_existing_for_same_idempotency_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     provider_id = uuid4()
     existing_offering = offering(provider_id)
     payload = booking_payload(
@@ -298,6 +308,9 @@ async def test_booking_returns_existing_for_same_idempotency_key() -> None:
     appointments.add.assert_not_awaited()
     available_slots.execute.assert_not_awaited()
     customer_creator_getter.execute.assert_not_awaited()
+    assert 'appointment.booking_replayed' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
@@ -330,7 +343,9 @@ async def test_list_provider_appointments_uses_current_provider_id_from_token() 
 
 
 @pytest.mark.asyncio
-async def test_book_public_appointment_rejects_reused_idempotency_key() -> None:
+async def test_book_public_appointment_rejects_reused_idempotency_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     provider_id = uuid4()
     existing_offering = offering(provider_id)
     existing_appointment = appointment(provider_id, existing_offering.id)
@@ -356,10 +371,19 @@ async def test_book_public_appointment_rejects_reused_idempotency_key() -> None:
         )
 
     appointments.add.assert_not_awaited()
+    conflict = next(
+        record
+        for record in caplog.records
+        if getattr(record, 'event_name', None) == 'appointment.booking_conflict'
+    )
+    assert conflict.__dict__['reason'] == 'idempotency_mismatch'
 
 
 @pytest.mark.asyncio
-async def test_book_public_appointment_raises_when_start_is_unavailable() -> None:
+async def test_book_public_appointment_raises_when_start_is_unavailable(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     provider_id = uuid4()
     start_at = datetime(2026, 6, 10, 9, 0)
     existing_offering = offering(provider_id)
@@ -391,6 +415,12 @@ async def test_book_public_appointment_raises_when_start_is_unavailable() -> Non
     unit_of_work.flush.assert_not_awaited()
     unit_of_work.commit.assert_not_awaited()
     unit_of_work.refresh.assert_not_awaited()
+    rejected = next(
+        record
+        for record in caplog.records
+        if getattr(record, 'event_name', None) == 'appointment.booking_rejected'
+    )
+    assert rejected.__dict__['reason'] == 'outside_availability'
 
 
 @pytest.mark.asyncio

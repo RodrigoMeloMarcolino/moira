@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -102,7 +103,10 @@ def public_availability_cache_mock() -> Mock:
 
 
 @pytest.mark.asyncio
-async def test_create_offering_creates_offering_for_existing_provider() -> None:
+async def test_create_offering_creates_offering_for_existing_provider(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_provider = provider()
     offerings = offering_repository_mock()
     unit_of_work = unit_of_work_mock()
@@ -131,6 +135,9 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
     assert created.duration_minutes == 30
     assert created.price_cents == 15000
     assert created.is_active is True
+    assert 'offering.created' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
@@ -257,7 +264,10 @@ async def test_list_provider_offerings_uses_current_provider_id_from_token() -> 
 
 
 @pytest.mark.asyncio
-async def test_update_offering_updates_only_sent_fields() -> None:
+async def test_update_offering_updates_only_sent_fields(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_offering = offering(uuid4())
     offerings = offering_repository_mock(offering_by_id=existing_offering)
     unit_of_work = unit_of_work_mock()
@@ -292,10 +302,19 @@ async def test_update_offering_updates_only_sent_fields() -> None:
     assert updated.description == 'Atendimento inicial'
     assert updated.duration_minutes == 30
     assert updated.price_cents == 15000
+    updated_event = next(
+        record
+        for record in caplog.records
+        if getattr(record, 'event_name', None) == 'offering.updated'
+    )
+    assert updated_event.__dict__['schedule_changed'] is True
 
 
 @pytest.mark.asyncio
-async def test_update_offering_raises_when_offering_is_missing() -> None:
+async def test_update_offering_raises_when_offering_is_missing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     missing_offering_id = uuid4()
     offerings = offering_repository_mock()
     unit_of_work = unit_of_work_mock()
@@ -311,10 +330,13 @@ async def test_update_offering_raises_when_offering_is_missing() -> None:
     offerings.get_by_id.assert_awaited_once_with(missing_offering_id)
     unit_of_work.commit.assert_not_awaited()
     unit_of_work.refresh.assert_not_awaited()
+    assert caplog.records[-1].__dict__['reason'] == 'not_found'
 
 
 @pytest.mark.asyncio
-async def test_update_offering_raises_when_offering_is_not_owned() -> None:
+async def test_update_offering_raises_when_offering_is_not_owned(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     existing_offering = offering(uuid4())
     offerings = offering_repository_mock(offering_by_id=existing_offering)
     unit_of_work = unit_of_work_mock()
@@ -329,6 +351,7 @@ async def test_update_offering_raises_when_offering_is_not_owned() -> None:
 
     unit_of_work.commit.assert_not_awaited()
     unit_of_work.refresh.assert_not_awaited()
+    assert caplog.records[-1].__dict__['reason'] == 'access_forbidden'
 
 
 @pytest.mark.asyncio

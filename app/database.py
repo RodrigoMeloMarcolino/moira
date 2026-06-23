@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 
 from sqlalchemy import text
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def create_engine() -> AsyncEngine:
@@ -35,7 +38,15 @@ async def check_database_ready() -> bool:
     try:
         async with engine.connect() as connection:
             await connection.execute(text('SELECT 1'))
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            'PostgreSQL readiness check failed',
+            extra={
+                'event_name': 'readiness.dependency_failed',
+                'dependency': 'postgresql',
+                'reason': type(exc).__name__,
+            },
+        )
         return False
 
     return True

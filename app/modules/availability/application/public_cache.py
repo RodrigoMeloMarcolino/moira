@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
 from app.shared.application.cache import AsyncCache
+
+logger = logging.getLogger(__name__)
 
 
 class PublicAvailabilityCache(Protocol):
@@ -89,12 +92,22 @@ class RedisPublicAvailabilityCache:
         try:
             data = json.loads(payload)
         except json.JSONDecodeError:
+            self._log_invalid('invalid_json')
             return None
 
         if not isinstance(data, list):
+            self._log_invalid('invalid_shape')
             return None
 
-        return [datetime.fromisoformat(item) for item in data if isinstance(item, str)]
+        if not all(isinstance(item, str) for item in data):
+            self._log_invalid('invalid_shape')
+            return None
+
+        try:
+            return [datetime.fromisoformat(item) for item in data]
+        except ValueError:
+            self._log_invalid('invalid_datetime')
+            return None
 
     async def set_slots(
         self,
@@ -169,4 +182,14 @@ class RedisPublicAvailabilityCache:
             'available_slots:'
             f'{provider_id}:{offering_id}:{target_date.isoformat()}'
             f':sv{schedule_version}:dv{day_version}'
+        )
+
+    def _log_invalid(self, reason: str) -> None:
+        logger.warning(
+            'Public availability cache payload is invalid',
+            extra={
+                'event_name': 'cache.payload_invalid',
+                'cache_namespace': 'available_slots',
+                'reason': reason,
+            },
         )

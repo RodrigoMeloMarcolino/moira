@@ -1,3 +1,5 @@
+import logging
+
 from app.modules.auth.domain.password_policy import validate_signup_password
 from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
@@ -18,6 +20,7 @@ from app.shared.application.exceptions import UnitOfWorkConflict
 from app.shared.application.unit_of_work import UnitOfWork
 
 MAX_PROVIDER_SLUG_GENERATION_ATTEMPTS = 5
+logger = logging.getLogger(__name__)
 
 
 class SignupProviderUseCase:
@@ -46,6 +49,13 @@ class SignupProviderUseCase:
                     password=payload.password,
                 )
             except UserEmailAlreadyExists as exc:
+                logger.info(
+                    'Provider signup rejected',
+                    extra={
+                        'event_name': 'provider.signup_rejected',
+                        'reason': 'email_exists',
+                    },
+                )
                 raise ProviderEmailAlreadyExists from exc
 
             try:
@@ -70,8 +80,23 @@ class SignupProviderUseCase:
                 continue
 
             await self.unit_of_work.refresh(provider)
+            logger.info(
+                'Provider signup succeeded',
+                extra={
+                    'event_name': 'provider.signup_succeeded',
+                    'user.id': user.id,
+                    'provider.id': provider.id,
+                },
+            )
             return provider
 
+        logger.warning(
+            'Provider signup rejected after slug conflicts',
+            extra={
+                'event_name': 'provider.signup_rejected',
+                'reason': 'slug_conflict_exhausted',
+            },
+        )
         raise ProviderSignupConflict
 
 

@@ -73,6 +73,68 @@ Respostas esperadas:
 
 `/health` valida apenas que a aplicacao esta viva. `/ready` tambem valida a conexao com o PostgreSQL.
 
+## Logging estruturado
+
+A aplicacao emite um evento por linha em `stdout`. O formato padrao e JSON e
+segue um contrato compativel com o OpenTelemetry Logs Data Model. Toda resposta
+HTTP inclui `X-Request-ID` e `X-Correlation-ID`; um `X-Correlation-ID` valido
+recebido do chamador e preservado.
+
+Configuracao principal:
+
+```text
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+LOG_EXPORTERS=stdout
+OTEL_SERVICE_NAME=moira
+```
+
+Para desenvolvimento local, `LOG_FORMAT=console` produz uma saida legivel com
+os mesmos nomes de evento e atributos. Para exportar em batch via OTLP/HTTP:
+
+```text
+LOG_EXPORTERS=stdout,otlp
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://localhost:4318/v1/logs
+OTEL_EXPORTER_OTLP_HEADERS=
+OTEL_EXPORTER_OTLP_TIMEOUT=5
+```
+
+`stdout` permanece obrigatorio. Falhas remotas do exporter nao afetam requests
+nem readiness. Headers OTLP, credenciais, tokens, payloads, dados pessoais,
+URLs de banco/cache e chaves de idempotencia nunca devem ser registrados.
+
+O access log proprio do Moira substitui `uvicorn.access`, evitando duplicidade.
+Os campos `event_name`, `request.id`, `correlation.id` e IDs de dominio sao
+metadata estruturada, nao labels do Loki.
+
+### Pipeline local Collector, Loki e Grafana
+
+Suba a stack de observabilidade separadamente:
+
+```powershell
+docker compose -f docker-compose.observability.yaml up -d
+```
+
+Inicie a API com `LOG_EXPORTERS=stdout,otlp`. O Collector recebe OTLP em
+`localhost:4318`, o Loki responde em `localhost:3100` e o Grafana em
+`http://localhost:3000` (`admin`/`admin` apenas para desenvolvimento).
+
+Uma consulta LogQL por correlacao pode usar:
+
+```logql
+{service_name="moira"} | correlation_id="operation-123"
+```
+
+Com a API e a stack ativas, valide o caminho completo por meio do proxy de data
+source do Grafana:
+
+```powershell
+uv run python scripts/smoke_observability.py
+```
+
+Cada ambiente deve escolher OTLP direto ou coleta de `stdout` para um mesmo
+backend, nunca os dois, para evitar ingestao duplicada.
+
 ## Regras de cadastro
 
 O cadastro inicial de provider (`POST /v1/providers/signup`) aceita senhas de

@@ -20,3 +20,4 @@ ADRs capture important technical and product decisions, their context, and their
 - [ADR 0012 - Provider signup password policy](0012-provider-signup-password-policy.md)
 - [ADR 0013 - Provider auth, ownership, and booking idempotency](0013-provider-auth-ownership-idempotency.md)
 - [ADR 0014 - Version v1 routes and standard error envelope](0014-version-v1-and-standard-error-envelope.md)
+- [ADR 0015 - Use vendor-neutral structured logging and OTLP](0015-use-vendor-neutral-structured-logging-and-otlp.md)

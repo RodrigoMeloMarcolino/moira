@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, date, datetime, time
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
@@ -152,7 +153,10 @@ def public_availability_cache_mock() -> Mock:
 
 
 @pytest.mark.asyncio
-async def test_create_availability_rule_creates_rule_for_existing_provider() -> None:
+async def test_create_availability_rule_creates_rule_for_existing_provider(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_provider = provider()
     rules = availability_rule_repository_mock()
     unit_of_work = unit_of_work_mock()
@@ -181,6 +185,9 @@ async def test_create_availability_rule_creates_rule_for_existing_provider() -> 
     assert created.start_time == time(8, 0)
     assert created.end_time == time(12, 0)
     assert created.is_active is True
+    assert 'availability_rule.created' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
@@ -235,7 +242,10 @@ async def test_list_availability_rules_uses_current_provider_id_from_token() -> 
 
 
 @pytest.mark.asyncio
-async def test_update_provider_availability_rule_updates_only_sent_fields() -> None:
+async def test_update_provider_availability_rule_updates_only_sent_fields(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_rule = availability_rule(uuid4())
     rules = availability_rule_repository_mock(rule_by_id=existing_rule)
     unit_of_work = unit_of_work_mock()
@@ -264,10 +274,16 @@ async def test_update_provider_availability_rule_updates_only_sent_fields() -> N
     assert updated.start_time == time(8, 0)
     assert updated.end_time == time(13, 0)
     assert updated.is_active is False
+    assert 'availability_rule.updated' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
-async def test_update_provider_availability_rule_raises_when_rule_is_missing() -> None:
+async def test_update_provider_availability_rule_raises_when_rule_is_missing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     missing_rule_id = uuid4()
     rules = availability_rule_repository_mock()
     unit_of_work = unit_of_work_mock()
@@ -283,10 +299,13 @@ async def test_update_provider_availability_rule_raises_when_rule_is_missing() -
     rules.get_by_id.assert_awaited_once_with(missing_rule_id)
     unit_of_work.commit.assert_not_awaited()
     unit_of_work.refresh.assert_not_awaited()
+    assert caplog.records[-1].__dict__['reason'] == 'not_found'
 
 
 @pytest.mark.asyncio
-async def test_update_availability_rule_raises_when_rule_is_not_owned() -> None:
+async def test_update_availability_rule_raises_when_rule_is_not_owned(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     existing_rule = availability_rule(uuid4())
     rules = availability_rule_repository_mock(rule_by_id=existing_rule)
     unit_of_work = unit_of_work_mock()
@@ -301,6 +320,7 @@ async def test_update_availability_rule_raises_when_rule_is_not_owned() -> None:
 
     unit_of_work.commit.assert_not_awaited()
     unit_of_work.refresh.assert_not_awaited()
+    assert caplog.records[-1].__dict__['reason'] == 'access_forbidden'
 
 
 @pytest.mark.asyncio

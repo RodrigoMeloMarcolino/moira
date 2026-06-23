@@ -2,7 +2,8 @@
 
 Este repositorio usa GitHub Actions para expor quatro checks de merge:
 
-- `lint`: roda `uv run ruff check .`, `uv run ruff format --check .` e `uv run mypy app`.
+- `lint`: roda `uv run ruff check .`, `uv run ruff format --check .` e
+  `uv run mypy app tests/unit`.
 - `unit-tests`: roda `uv run pytest -m "not integration"`.
 - `integration-tests`: sobe PostgreSQL, aplica migrations e roda `uv run pytest -m integration`.
 - `pull-request-approval`: exige pelo menos um approve de um contribuidor no commit atual do PR, exceto para autores explicitamente isentos.

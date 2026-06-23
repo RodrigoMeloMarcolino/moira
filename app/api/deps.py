@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from functools import cached_property
 from typing import Annotated, Optional
@@ -64,6 +65,8 @@ from app.modules.users.application.use_cases import CreateUserUseCase
 from app.modules.users.infrastructure.repositories import SqlAlchemyUserRepository
 from app.shared.application.cache import AsyncCache
 from app.shared.infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
+logger = logging.getLogger(__name__)
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -244,6 +247,13 @@ async def get_current_provider(
     ],
 ) -> Provider:
     if credentials is None:
+        logger.info(
+            'Access rejected because credentials are missing',
+            extra={
+                'event_name': 'auth.access_rejected',
+                'reason': 'missing_credentials',
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='authentication required',
@@ -252,6 +262,13 @@ async def get_current_provider(
     try:
         user_id = container.access_tokens.verify_access_token(credentials.credentials)
     except InvalidAccessToken as exc:
+        logger.info(
+            'Access rejected because the token is invalid',
+            extra={
+                'event_name': 'auth.access_rejected',
+                'reason': 'invalid_token',
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='invalid access token',
@@ -259,6 +276,13 @@ async def get_current_provider(
 
     user = await container.users.get_by_id(user_id)
     if user is None:
+        logger.info(
+            'Access rejected because the user was not found',
+            extra={
+                'event_name': 'auth.access_rejected',
+                'reason': 'user_not_found',
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='invalid access token',
@@ -266,6 +290,14 @@ async def get_current_provider(
 
     provider = await container.providers.get_by_user_id(user.id)
     if provider is None:
+        logger.info(
+            'Access rejected because the provider was not found',
+            extra={
+                'event_name': 'auth.access_rejected',
+                'reason': 'provider_not_found',
+                'user.id': user.id,
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='invalid access token',

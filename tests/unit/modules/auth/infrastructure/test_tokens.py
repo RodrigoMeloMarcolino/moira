@@ -24,7 +24,10 @@ def test_hmac_jwt_access_token_round_trip() -> None:
 
 def test_hmac_jwt_access_token_rejects_invalid_signature() -> None:
     token = token_codec().issue_access_token(user_id=uuid4())
-    invalid_token = f'{token[:-1]}x'
+    header, payload, signature = token.split('.')
+    replacement = 'A' if signature[0] != 'A' else 'B'
+    invalid_signature = f'{replacement}{signature[1:]}'
+    invalid_token = f'{header}.{payload}.{invalid_signature}'
 
     with pytest.raises(InvalidAccessToken):
         token_codec().verify_access_token(invalid_token)

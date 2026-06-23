@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, time
 from uuid import UUID
 
@@ -26,6 +27,8 @@ from app.modules.providers.application.exceptions import (
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.shared.application.unit_of_work import UnitOfWork
 
+logger = logging.getLogger(__name__)
+
 
 class CreateAvailabilityRuleUseCase:
     def __init__(
@@ -51,6 +54,16 @@ class CreateAvailabilityRuleUseCase:
                 current_provider_id
             )
         await self.uow.refresh(rule)
+
+        logger.info(
+            'Availability rule created',
+            extra={
+                'event_name': 'availability_rule.created',
+                'provider.id': current_provider_id,
+                'rule.id': rule.id,
+                'weekday': rule.weekday,
+            },
+        )
 
         return rule
 
@@ -85,12 +98,30 @@ class UpdateProviderAvailabilityRuleUseCase:
     ) -> AvailabilityRule:
         rule = await self.availability_rules.get_by_id(rule_id)
         if rule is None:
+            logger.info(
+                'Availability rule update rejected',
+                extra={
+                    'event_name': 'availability_rule.update_rejected',
+                    'rule.id': rule_id,
+                    'reason': 'not_found',
+                },
+            )
             raise AvailabilityNotFound(f'availability not found by rule_id {rule_id}')
 
         if rule.provider_id != current_provider_id:
+            logger.warning(
+                'Availability rule update rejected',
+                extra={
+                    'event_name': 'availability_rule.update_rejected',
+                    'provider.id': current_provider_id,
+                    'rule.id': rule_id,
+                    'reason': 'access_forbidden',
+                },
+            )
             raise ProviderAccessForbidden('provider access forbidden')
 
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        changes = payload.model_dump(exclude_unset=True)
+        for field, value in changes.items():
             setattr(rule, field, value)
 
         await self.uow.commit()
@@ -99,6 +130,16 @@ class UpdateProviderAvailabilityRuleUseCase:
                 current_provider_id
             )
         await self.uow.refresh(rule)
+
+        logger.info(
+            'Availability rule updated',
+            extra={
+                'event_name': 'availability_rule.updated',
+                'provider.id': current_provider_id,
+                'rule.id': rule.id,
+                'changed_fields': sorted(changes),
+            },
+        )
 
         return rule
 
