@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -50,14 +50,22 @@ class SQLAlchemyAppointmentSlotRepository:
         start_at: datetime,
         end_at: datetime,
     ) -> list[AppointmentSlot]:
+        normalized_start_at = self._normalize_range_bound(start_at)
+        normalized_end_at = self._normalize_range_bound(end_at)
         result = await self.session.scalars(
             select(AppointmentSlot)
             .where(
                 AppointmentSlot.provider_id == provider_id,
-                AppointmentSlot.slot_start_at >= start_at,
-                AppointmentSlot.slot_start_at < end_at,
+                AppointmentSlot.slot_start_at >= normalized_start_at,
+                AppointmentSlot.slot_start_at < normalized_end_at,
             )
             .order_by(AppointmentSlot.slot_start_at)
         )
 
         return list(result)
+
+    def _normalize_range_bound(self, value: datetime) -> datetime:
+        if value.tzinfo is not None:
+            return value
+
+        return value.replace(tzinfo=UTC)

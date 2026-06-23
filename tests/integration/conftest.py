@@ -1,12 +1,21 @@
 import os
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Optional
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache() -> Iterator[None]:
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _runs_integration_tests(config: pytest.Config) -> bool:
@@ -62,9 +71,29 @@ async def dispose_engine_after_test() -> AsyncIterator[None]:
 async def client() -> AsyncIterator[AsyncClient]:
     from app.main import create_app
 
-    transport = ASGITransport(app=create_app())
-    async with AsyncClient(transport=transport, base_url='http://testserver') as client:
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url='http://testserver',
+        ) as client:
+            yield client
+
+
+@pytest_asyncio.fixture
+async def redis_client() -> AsyncIterator[object]:
+    redis_url = os.environ['REDIS_URL']
+
+    import redis.asyncio as redis
+
+    client = redis.from_url(redis_url, decode_responses=True)
+    await client.flushdb()
+    try:
         yield client
+    finally:
+        await client.flushdb()
+        await client.aclose()
 
 
 def unique_value(prefix: str) -> str:

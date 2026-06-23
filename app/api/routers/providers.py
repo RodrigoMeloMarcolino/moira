@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import GetProviderBySlugUseCaseDep, SignupProviderUseCaseDep
+from app.api.deps import (
+    GetPublicProviderBySlugUseCaseDep,
+    SignupProviderUseCaseDep,
+)
 from app.modules.providers.application.exceptions import (
     ProviderEmailAlreadyExists,
     ProviderNotFound,
@@ -42,8 +45,8 @@ async def signup_provider_account(
 @providers_router.get('/public/providers/{slug}', response_model=ProviderCatalogPublic)
 async def get_provider_by_slug(
     slug: str,
-    use_case: GetProviderBySlugUseCaseDep,
-) -> Provider:
+    use_case: GetPublicProviderBySlugUseCaseDep,
+) -> ProviderCatalogPublic:
     try:
         return await use_case.execute(slug)
     except ProviderNotFound as exc:

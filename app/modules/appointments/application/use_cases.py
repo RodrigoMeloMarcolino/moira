@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -21,6 +21,7 @@ from app.modules.appointments.schemas.booking import PublicAppointmentBookingCre
 from app.modules.availability.application.input_ports import (
     ProviderAvailableSlotsRetriever,
 )
+from app.modules.availability.application.public_cache import PublicAvailabilityCache
 from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone
 from app.modules.offerings.application.exceptions import OfferingNotFound
@@ -41,6 +42,7 @@ class BookPublicAppointmentUseCase:
         get_or_create_customer_by_phone: CustomerCreatorGetter,
         list_provider_available_slots: ProviderAvailableSlotsRetriever,
         uow: UnitOfWork,
+        public_availability_cache: PublicAvailabilityCache | None = None,
     ) -> None:
         self.appointments = appointments
         self.offerings = offerings
@@ -49,6 +51,7 @@ class BookPublicAppointmentUseCase:
         self.get_or_create_customer_by_phone = get_or_create_customer_by_phone
         self.list_provider_available_slots = list_provider_available_slots
         self.uow = uow
+        self.public_availability_cache = public_availability_cache
 
     async def execute(
         self,
@@ -97,11 +100,11 @@ class BookPublicAppointmentUseCase:
 
                 return existing_appointment
 
-        start_at = payload.start_at.replace(second=0, microsecond=0)
+        requested_start_at = payload.start_at.replace(second=0, microsecond=0)
 
         try:
-            slots_starts = build_occupied_slot_starts(
-                start_at,
+            requested_slot_starts = build_occupied_slot_starts(
+                requested_start_at,
                 offering.duration_minutes,
             )
         except StartOutOfBoundary as exc:
@@ -110,10 +113,10 @@ class BookPublicAppointmentUseCase:
         available_starts = await self.list_provider_available_slots.execute(
             provider_slug=provider_slug,
             offering_id=payload.offering_id,
-            target_date=start_at.date(),
+            target_date=requested_start_at.date(),
         )
 
-        if start_at not in available_starts:
+        if requested_start_at not in available_starts:
             raise AppointmentStartUnavailable(
                 'appointment start_at is outside provider availability'
             )
@@ -128,6 +131,11 @@ class BookPublicAppointmentUseCase:
             )
             await self.uow.flush()
 
+            start_at = self._normalize_persisted_datetime(requested_start_at)
+            slots_starts = [
+                self._normalize_persisted_datetime(slot_start_at)
+                for slot_start_at in requested_slot_starts
+            ]
             end_at = start_at + timedelta(minutes=offering.duration_minutes)
 
             appointment = Appointment(
@@ -157,6 +165,16 @@ class BookPublicAppointmentUseCase:
 
             await self.appointment_slots.add_many(appointment_slots)
             await self.uow.commit()
+            if self.public_availability_cache is not None:
+                await self.public_availability_cache.invalidate_slots(
+                    provider_id,
+                    offering.id,
+                    start_at.date(),
+                )
+                await self.public_availability_cache.bump_day_version(
+                    provider_id,
+                    start_at.date(),
+                )
             await self.uow.refresh(appointment)
 
             return appointment
@@ -183,6 +201,12 @@ class BookPublicAppointmentUseCase:
             raise AppointmentBookingConflict(
                 'appointment time is no longer available'
             ) from exc
+
+    def _normalize_persisted_datetime(self, value: datetime) -> datetime:
+        if value.tzinfo is not None:
+            return value
+
+        return value.replace(tzinfo=UTC)
 
 
 class ListProviderAppointmentsUseCase:

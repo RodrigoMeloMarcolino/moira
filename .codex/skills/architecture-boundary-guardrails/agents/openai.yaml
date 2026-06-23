@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture Boundary Guardrails"
+  short_description: "Prevent cross-domain coupling"
+  default_prompt: "Use $architecture-boundary-guardrails to review or refactor code for domain boundary leaks and dependency cascades."
