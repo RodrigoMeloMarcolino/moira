@@ -94,9 +94,7 @@ class RedisPublicAvailabilityCache:
         if not isinstance(data, list):
             return None
 
-        return [
-            datetime.fromisoformat(item) for item in data if isinstance(item, str)
-        ]
+        return [datetime.fromisoformat(item) for item in data if isinstance(item, str)]
 
     async def set_slots(
         self,

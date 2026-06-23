@@ -83,9 +83,7 @@ async def test_list_public_provider_offerings_returns_cached_payload() -> None:
         ),
         ttl_seconds=600,
     ).get(current_provider.id)
-    public_cache.get = AsyncMock(
-        return_value=cached_offerings
-    )
+    public_cache.get = AsyncMock(return_value=cached_offerings)
     public_cache.set = AsyncMock()
     use_case = ListPublicProviderOfferingsUseCase(
         providers=Mock(get_by_slug=AsyncMock(return_value=current_provider)),

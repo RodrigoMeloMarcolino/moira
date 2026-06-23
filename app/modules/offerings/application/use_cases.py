@@ -141,10 +141,7 @@ class UpdateOfferingUseCase:
         await self.unit_of_work.commit()
         if self.public_offerings_cache is not None:
             await self.public_offerings_cache.invalidate(current_provider_id)
-        if (
-            should_bump_schedule_version
-            and self.public_availability_cache is not None
-        ):
+        if should_bump_schedule_version and self.public_availability_cache is not None:
             await self.public_availability_cache.bump_schedule_version(
                 current_provider_id
             )

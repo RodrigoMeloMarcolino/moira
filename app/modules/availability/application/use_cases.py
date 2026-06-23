@@ -226,9 +226,7 @@ class ListPublicProviderAvailableSlotsUseCase:
             )
 
         if self.public_cache is not None:
-            schedule_version = await self.public_cache.get_schedule_version(
-                provider.id
-            )
+            schedule_version = await self.public_cache.get_schedule_version(provider.id)
             day_version = await self.public_cache.get_day_version(
                 provider.id,
                 target_date,

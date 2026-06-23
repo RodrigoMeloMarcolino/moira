@@ -123,9 +123,7 @@ async def test_create_offering_creates_offering_for_existing_provider() -> None:
 
     offerings.add.assert_awaited_once_with(created)
     unit_of_work.commit.assert_awaited_once_with()
-    public_offerings_cache.invalidate.assert_awaited_once_with(
-        existing_provider.id
-    )
+    public_offerings_cache.invalidate.assert_awaited_once_with(existing_provider.id)
     unit_of_work.refresh.assert_awaited_once_with(created)
     assert created.provider_id == existing_provider.id
     assert created.title == 'Consulta'
@@ -334,8 +332,9 @@ async def test_update_offering_raises_when_offering_is_not_owned() -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_offering_does_not_bump_schedule_for_catalog_only_changes(
-) -> None:
+async def test_update_offering_does_not_bump_schedule_for_catalog_only_changes() -> (
+    None
+):
     existing_offering = offering(uuid4())
     offerings = offering_repository_mock(offering_by_id=existing_offering)
     unit_of_work = unit_of_work_mock()
