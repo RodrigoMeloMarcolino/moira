@@ -45,6 +45,11 @@ def test_invalid_logging_settings_fail(field: str, value: str) -> None:
         Settings.model_validate({field: value})
 
 
-def test_otlp_requires_endpoint() -> None:
+def test_otlp_requires_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(Settings.model_config, 'env_file', None)
+    monkeypatch.delenv('OTEL_EXPORTER_OTLP_LOGS_ENDPOINT', raising=False)
+
     with pytest.raises(ValidationError):
         Settings.model_validate({'LOG_EXPORTERS': 'stdout,otlp'})

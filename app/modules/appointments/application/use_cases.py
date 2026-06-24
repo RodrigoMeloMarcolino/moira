@@ -245,7 +245,7 @@ class BookPublicAppointmentUseCase:
             self._log_conflict(
                 'slot_conflict',
                 provider_id=provider_id,
-                offering_id=offering.id,
+                offering_id=payload.offering_id,
             )
             raise AppointmentBookingConflict(
                 'appointment time is no longer available'
