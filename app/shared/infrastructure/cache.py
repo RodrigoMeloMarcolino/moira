@@ -95,15 +95,25 @@ class RedisCache:
         try:
             return int(value)
         except ValueError:
-            logger.warning('Cache value for key `%s` is not an integer', key)
+            logger.warning(
+                'Cache payload is not an integer',
+                extra={
+                    'event_name': 'cache.payload_invalid',
+                    'cache_namespace': key.partition(':')[0],
+                    'reason': 'invalid_integer',
+                },
+            )
             return None
 
     def _log_failure(self, operation: str, key: str, exc: Exception) -> None:
         logger.warning(
-            'Cache %s failed for key `%s`: %s',
-            operation,
-            key,
-            exc,
+            'Redis cache operation failed',
+            extra={
+                'event_name': 'cache.backend_degraded',
+                'operation': operation,
+                'cache_namespace': key.partition(':')[0],
+                'reason': type(exc).__name__,
+            },
         )
 
 
@@ -112,7 +122,13 @@ async def build_cache_backend(settings: Settings) -> tuple[AsyncCache, Any | Non
         return NullCache(), None
 
     if redis is None:
-        logger.warning('Redis package is unavailable; falling back to null cache')
+        logger.warning(
+            'Redis package is unavailable; falling back to null cache',
+            extra={
+                'event_name': 'cache.backend_degraded',
+                'reason': 'package_unavailable',
+            },
+        )
         return NullCache(), None
 
     client = redis.from_url(settings.redis_url, decode_responses=True)
@@ -123,8 +139,19 @@ async def build_cache_backend(settings: Settings) -> tuple[AsyncCache, Any | Non
         if not _is_redis_connection_error(exc):
             raise
 
-        logger.warning('Redis is unavailable; falling back to null cache: %s', exc)
+        logger.warning(
+            'Redis is unavailable; falling back to null cache',
+            extra={
+                'event_name': 'cache.backend_degraded',
+                'operation': 'ping',
+                'reason': type(exc).__name__,
+            },
+        )
         await client.aclose()
         return NullCache(), None
 
+    logger.info(
+        'Redis cache backend is ready',
+        extra={'event_name': 'cache.backend_ready', 'backend': 'redis'},
+    )
     return RedisCache(client), client

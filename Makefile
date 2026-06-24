@@ -3,7 +3,7 @@
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
-	uv run mypy app
+	uv run mypy app tests/unit
 
 test-unit:
 	uv run pytest -m "not integration"

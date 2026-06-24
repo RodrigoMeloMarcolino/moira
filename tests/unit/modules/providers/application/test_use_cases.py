@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -91,7 +92,9 @@ def signup_use_case(
 @pytest.mark.asyncio
 async def test_signup_provider_creates_user_and_provider(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO)
     created_user = user()
     create_user = user_creator_mock(returned_user=created_user)
     providers = provider_repository_mock()
@@ -127,6 +130,9 @@ async def test_signup_provider_creates_user_and_provider(
     assert provider.slug == slug
     assert provider.timezone == 'America/Fortaleza'
     assert provider.currency_code == 'BRL'
+    assert 'provider.signup_succeeded' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
@@ -160,7 +166,9 @@ async def test_signup_provider_rejects_invalid_password_before_repositories() ->
 @pytest.mark.asyncio
 async def test_signup_provider_rejects_duplicate_email(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO)
     create_user = user_creator_mock(error=UserEmailAlreadyExists())
     providers = provider_repository_mock()
     use_case = signup_use_case(create_user=create_user, providers=providers)
@@ -180,6 +188,7 @@ async def test_signup_provider_rejects_duplicate_email(
         password='secure-password',
     )
     providers.add.assert_not_awaited()
+    assert caplog.records[-1].__dict__['reason'] == 'email_exists'
 
 
 @pytest.mark.asyncio
@@ -215,6 +224,7 @@ async def test_signup_provider_retries_when_slug_exists(
 @pytest.mark.asyncio
 async def test_signup_provider_rolls_back_on_unit_of_work_conflict(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     unit_of_work = unit_of_work_mock(commit_error=UnitOfWorkConflict())
     providers = provider_repository_mock()
@@ -232,6 +242,7 @@ async def test_signup_provider_rolls_back_on_unit_of_work_conflict(
     assert unit_of_work.commit.await_count == 5
     assert unit_of_work.rollback.await_count == 5
     unit_of_work.refresh.assert_not_awaited()
+    assert caplog.records[-1].__dict__['reason'] == 'slug_conflict_exhausted'
 
 
 @pytest.mark.asyncio

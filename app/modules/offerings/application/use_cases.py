@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from app.modules.availability.application.public_cache import PublicAvailabilityCache
@@ -16,6 +17,8 @@ from app.modules.providers.application.exceptions import (
 )
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.shared.application.unit_of_work import UnitOfWork
+
+logger = logging.getLogger(__name__)
 
 
 class CreateOfferingUseCase:
@@ -40,6 +43,15 @@ class CreateOfferingUseCase:
         if self.public_offerings_cache is not None:
             await self.public_offerings_cache.invalidate(current_provider_id)
         await self.unit_of_work.refresh(offering)
+
+        logger.info(
+            'Offering created',
+            extra={
+                'event_name': 'offering.created',
+                'provider.id': current_provider_id,
+                'offering.id': offering.id,
+            },
+        )
 
         return offering
 
@@ -124,9 +136,26 @@ class UpdateOfferingUseCase:
     ) -> Offering:
         offering = await self.offerings.get_by_id(offering_id)
         if offering is None:
+            logger.info(
+                'Offering update rejected',
+                extra={
+                    'event_name': 'offering.update_rejected',
+                    'offering.id': offering_id,
+                    'reason': 'not_found',
+                },
+            )
             raise OfferingNotFound
 
         if offering.provider_id != current_provider_id:
+            logger.warning(
+                'Offering update rejected',
+                extra={
+                    'event_name': 'offering.update_rejected',
+                    'provider.id': current_provider_id,
+                    'offering.id': offering_id,
+                    'reason': 'access_forbidden',
+                },
+            )
             raise ProviderAccessForbidden
 
         changes = payload.model_dump(exclude_unset=True)
@@ -146,5 +175,16 @@ class UpdateOfferingUseCase:
                 current_provider_id
             )
         await self.unit_of_work.refresh(offering)
+
+        logger.info(
+            'Offering updated',
+            extra={
+                'event_name': 'offering.updated',
+                'provider.id': current_provider_id,
+                'offering.id': offering.id,
+                'changed_fields': sorted(changes),
+                'schedule_changed': should_bump_schedule_version,
+            },
+        )
 
         return offering

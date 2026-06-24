@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from typing import Optional
 from unittest.mock import AsyncMock, Mock
@@ -62,7 +63,10 @@ def build_use_case(
 
 
 @pytest.mark.asyncio
-async def test_login_provider_returns_access_token_for_valid_credentials() -> None:
+async def test_login_provider_returns_access_token_for_valid_credentials(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_user = user()
     existing_provider = provider(existing_user.id)
     use_case = build_use_case(
@@ -78,20 +82,30 @@ async def test_login_provider_returns_access_token_for_valid_credentials() -> No
     assert result.token_type == 'bearer'
     assert result.expires_in == 1800
     assert result.provider_id == existing_provider.id
+    assert 'auth.login_succeeded' in {
+        getattr(record, 'event_name', None) for record in caplog.records
+    }
 
 
 @pytest.mark.asyncio
-async def test_login_provider_rejects_missing_user() -> None:
+async def test_login_provider_rejects_missing_user(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     use_case = build_use_case(existing_user=None, existing_provider=None)
 
     with pytest.raises(InvalidCredentials):
         await use_case.execute(
             LoginCreate(email='missing@example.com', password='secure-password')
         )
+    assert caplog.records[-1].__dict__['reason'] == 'user_not_found'
 
 
 @pytest.mark.asyncio
-async def test_login_provider_rejects_invalid_password() -> None:
+async def test_login_provider_rejects_invalid_password(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_user = user()
     use_case = build_use_case(
         existing_user=existing_user,
@@ -103,10 +117,14 @@ async def test_login_provider_rejects_invalid_password() -> None:
         await use_case.execute(
             LoginCreate(email=existing_user.email, password='wrong-password')
         )
+    assert caplog.records[-1].__dict__['reason'] == 'password_mismatch'
 
 
 @pytest.mark.asyncio
-async def test_login_provider_rejects_user_without_provider() -> None:
+async def test_login_provider_rejects_user_without_provider(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
     existing_user = user()
     use_case = build_use_case(existing_user=existing_user, existing_provider=None)
 
@@ -114,3 +132,4 @@ async def test_login_provider_rejects_user_without_provider() -> None:
         await use_case.execute(
             LoginCreate(email=existing_user.email, password='secure-password')
         )
+    assert caplog.records[-1].__dict__['reason'] == 'provider_not_found'

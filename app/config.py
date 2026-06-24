@@ -1,7 +1,7 @@
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -28,6 +28,24 @@ class Settings(BaseSettings):
     password_hash_scheme: str = Field(default='bcrypt', alias='PASSWORD_HASH_SCHEME')
     default_timezone: str = Field(default='America/Fortaleza', alias='DEFAULT_TIMEZONE')
     log_level: str = Field(default='INFO', alias='LOG_LEVEL')
+    log_format: Literal['json', 'console'] = Field(default='json', alias='LOG_FORMAT')
+    log_exporters: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=('stdout',), alias='LOG_EXPORTERS'
+    )
+    otel_exporter_otlp_logs_endpoint: AnyHttpUrl | None = Field(
+        default=None,
+        alias='OTEL_EXPORTER_OTLP_LOGS_ENDPOINT',
+    )
+    otel_exporter_otlp_headers: SecretStr | None = Field(
+        default=None,
+        alias='OTEL_EXPORTER_OTLP_HEADERS',
+    )
+    otel_exporter_otlp_timeout: float = Field(
+        default=5,
+        gt=0,
+        alias='OTEL_EXPORTER_OTLP_TIMEOUT',
+    )
+    otel_service_name: str | None = Field(default=None, alias='OTEL_SERVICE_NAME')
     cache_enabled: bool = Field(default=True, alias='CACHE_ENABLED')
     redis_url: str = Field(default='redis://localhost:6379/0', alias='REDIS_URL')
     cache_ttl_public_provider_seconds: int = Field(
@@ -62,6 +80,47 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(',') if origin.strip()]
 
         return value
+
+    @field_validator('log_level', mode='before')
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        normalized = str(value).upper()
+        allowed = {'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}
+        if normalized not in allowed:
+            raise ValueError(f'LOG_LEVEL must be one of {sorted(allowed)}')
+        return normalized
+
+    @field_validator('log_format', mode='before')
+    @classmethod
+    def normalize_log_format(cls, value: str) -> str:
+        return str(value).lower()
+
+    @field_validator('log_exporters', mode='before')
+    @classmethod
+    def parse_log_exporters(cls, value: str | tuple[str, ...]) -> tuple[str, ...]:
+        if isinstance(value, str):
+            exporters = tuple(
+                item.strip().lower() for item in value.split(',') if item.strip()
+            )
+        else:
+            exporters = tuple(str(item).lower() for item in value)
+
+        allowed = {'stdout', 'otlp'}
+        if not exporters or set(exporters) - allowed:
+            raise ValueError('LOG_EXPORTERS accepts only stdout or stdout,otlp')
+        if 'stdout' not in exporters:
+            raise ValueError('LOG_EXPORTERS must include stdout')
+        if len(set(exporters)) != len(exporters):
+            raise ValueError('LOG_EXPORTERS must not contain duplicates')
+        return exporters
+
+    @model_validator(mode='after')
+    def validate_otlp_configuration(self) -> 'Settings':
+        if 'otlp' in self.log_exporters and not self.otel_exporter_otlp_logs_endpoint:
+            raise ValueError(
+                'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT is required when otlp is enabled'
+            )
+        return self
 
 
 @lru_cache

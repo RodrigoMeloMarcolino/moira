@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
+
+from pydantic import ValidationError
 
 from app.modules.providers.schemas.catalog import ProviderCatalogPublic
 from app.shared.application.cache import AsyncCache
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderCatalogCache:
@@ -24,12 +29,18 @@ class ProviderCatalogCache:
         try:
             data = json.loads(payload)
         except json.JSONDecodeError:
+            self._log_invalid('invalid_json')
             return None
 
         if not isinstance(data, dict):
+            self._log_invalid('invalid_shape')
             return None
 
-        return ProviderCatalogPublic.model_validate(data)
+        try:
+            return ProviderCatalogPublic.model_validate(data)
+        except ValidationError:
+            self._log_invalid('invalid_schema')
+            return None
 
     async def set(self, provider: ProviderCatalogPublic) -> None:
         await self.cache.set(
@@ -40,3 +51,13 @@ class ProviderCatalogCache:
 
     def _key(self, slug: str) -> str:
         return f'public_provider:{slug}'
+
+    def _log_invalid(self, reason: str) -> None:
+        logger.warning(
+            'Public provider cache payload is invalid',
+            extra={
+                'event_name': 'cache.payload_invalid',
+                'cache_namespace': 'public_provider',
+                'reason': reason,
+            },
+        )
