@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
@@ -72,7 +72,7 @@ def async_cache_mock(
 async def test_public_availability_cache_returns_cached_slots() -> None:
     current_provider = provider()
     cache = RedisPublicAvailabilityCache(
-        async_cache_mock(payload='["2026-06-10T09:00:00"]'),
+        async_cache_mock(payload='["2026-06-10T12:00:00+00:00"]'),
         slots_ttl_seconds=30,
     )
 
@@ -84,7 +84,7 @@ async def test_public_availability_cache_returns_cached_slots() -> None:
         1,
     )
 
-    assert available_slots == [datetime(2026, 6, 10, 9, 0)]
+    assert available_slots == [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
 
 
 async def test_list_public_provider_available_slots_returns_cached_slots() -> None:
@@ -93,7 +93,9 @@ async def test_list_public_provider_available_slots_returns_cached_slots() -> No
     public_cache = Mock(spec=RedisPublicAvailabilityCache)
     public_cache.get_schedule_version = AsyncMock(return_value=1)
     public_cache.get_day_version = AsyncMock(return_value=1)
-    public_cache.get_slots = AsyncMock(return_value=[datetime(2026, 6, 10, 9, 0)])
+    public_cache.get_slots = AsyncMock(
+        return_value=[datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
+    )
     public_cache.set_slots = AsyncMock()
     fresh_use_case = Mock(spec=ListProviderAvailableSlotsUseCase)
     fresh_use_case.execute = AsyncMock()
@@ -110,7 +112,7 @@ async def test_list_public_provider_available_slots_returns_cached_slots() -> No
         date(2026, 6, 10),
     )
 
-    assert available_slots == [datetime(2026, 6, 10, 9, 0)]
+    assert available_slots == [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
     fresh_use_case.execute.assert_not_awaited()
 
 
@@ -122,7 +124,7 @@ async def test_list_public_provider_available_slots_caches_miss() -> None:
     public_cache.get_day_version = AsyncMock(return_value=1)
     public_cache.get_slots = AsyncMock(return_value=None)
     public_cache.set_slots = AsyncMock()
-    fresh_slots = [datetime(2026, 6, 10, 9, 0)]
+    fresh_slots = [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
     fresh_use_case = Mock(spec=ListProviderAvailableSlotsUseCase)
     fresh_use_case.execute = AsyncMock(return_value=fresh_slots)
     use_case = ListPublicProviderAvailableSlotsUseCase(

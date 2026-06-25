@@ -91,24 +91,24 @@ async def test_available_slots_cache_uses_versioning_after_rule_update(
         f'/v1/public/providers/{provider["slug"]}/available-slots',
         params={
             'offering_id': offering['id'],
-            'date': '2026-06-10',
+            'date': '2026-07-01',
         },
     )
 
     assert slots_response.status_code == 200
     assert slots_response.json() == [
-        '2026-06-10T09:00:00',
-        '2026-06-10T09:15:00',
-        '2026-06-10T09:30:00',
+        '2026-07-01T12:00:00Z',
+        '2026-07-01T12:15:00Z',
+        '2026-07-01T12:30:00Z',
     ]
     assert await redis_client.get(f'provider_schedule_version:{provider["id"]}') == '2'
     assert (
-        await redis_client.get(f'provider_day_version:{provider["id"]}:2026-06-10')
+        await redis_client.get(f'provider_day_version:{provider["id"]}:2026-07-01')
         == '1'
     )
     assert (
         await redis_client.exists(
-            f'available_slots:{provider["id"]}:{offering["id"]}:2026-06-10:sv2:dv1'
+            f'available_slots:{provider["id"]}:{offering["id"]}:2026-07-01:sv2:dv1'
         )
         == 1
     )
@@ -126,14 +126,14 @@ async def test_available_slots_cache_uses_versioning_after_rule_update(
         f'/v1/public/providers/{provider["slug"]}/available-slots',
         params={
             'offering_id': offering['id'],
-            'date': '2026-06-10',
+            'date': '2026-07-01',
         },
     )
     assert updated_response.status_code == 200
-    assert updated_response.json() == ['2026-06-10T09:00:00']
+    assert updated_response.json() == ['2026-07-01T12:00:00Z']
     assert (
         await redis_client.exists(
-            f'available_slots:{provider["id"]}:{offering["id"]}:2026-06-10:sv3:dv1'
+            f'available_slots:{provider["id"]}:{offering["id"]}:2026-07-01:sv3:dv1'
         )
         == 1
     )
@@ -144,13 +144,13 @@ async def test_booking_invalidates_available_slots_for_the_day(
     redis_client,
 ) -> None:
     provider, _, offering, _ = await create_provider_with_catalog(client)
-    cache_key = f'available_slots:{provider["id"]}:{offering["id"]}:2026-06-10:sv2:dv1'
+    cache_key = f'available_slots:{provider["id"]}:{offering["id"]}:2026-07-01:sv2:dv1'
 
     first_response = await client.get(
         f'/v1/public/providers/{provider["slug"]}/available-slots',
         params={
             'offering_id': offering['id'],
-            'date': '2026-06-10',
+            'date': '2026-07-01',
         },
     )
     assert first_response.status_code == 200
@@ -160,7 +160,7 @@ async def test_booking_invalidates_available_slots_for_the_day(
         f'/v1/public/providers/{provider["slug"]}/appointments',
         json={
             'offering_id': offering['id'],
-            'start_at': '2026-06-10T09:00:00',
+            'start_at': '2026-07-01T09:00:00-03:00',
             'customer_name': 'Customer Test',
             'customer_phone': '+155500000000',
         },
@@ -169,7 +169,7 @@ async def test_booking_invalidates_available_slots_for_the_day(
     assert booking_response.status_code == 201
     assert await redis_client.exists(cache_key) == 0
     assert (
-        await redis_client.get(f'provider_day_version:{provider["id"]}:2026-06-10')
+        await redis_client.get(f'provider_day_version:{provider["id"]}:2026-07-01')
         == '2'
     )
 
@@ -177,10 +177,10 @@ async def test_booking_invalidates_available_slots_for_the_day(
         f'/v1/public/providers/{provider["slug"]}/available-slots',
         params={
             'offering_id': offering['id'],
-            'date': '2026-06-10',
+            'date': '2026-07-01',
         },
     )
     assert second_response.status_code == 200
     assert second_response.json() == [
-        '2026-06-10T09:30:00',
+        '2026-07-01T12:30:00Z',
     ]

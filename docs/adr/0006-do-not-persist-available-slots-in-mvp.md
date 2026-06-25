@@ -18,9 +18,15 @@ Available start times will be calculated dynamically from provider availability 
 
 Only occupied slots are persisted in `appointment_slots`.
 
+Availability calculation uses the requested date as the provider-local calendar
+date. The calculated starts are deduplicated, filtered against the current UTC
+instant, and returned as timezone-aware UTC instants.
+
 ## Consequences
 
 - Availability reads must calculate candidates dynamically.
 - Availability reads are useful for UX but are not the final consistency guarantee.
 - Appointment creation must still rely on database constraints to prevent conflicts.
 - Changes to provider availability do not require rewriting pre-generated slot rows.
+- Overlapping weekly availability rules are allowed in the MVP; duplicate
+  candidate starts are normalized during dynamic calculation.

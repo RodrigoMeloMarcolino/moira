@@ -108,10 +108,16 @@ def provider_repository_mock(
     *,
     provider_id: Optional[UUID] = None,
     provider_by_id: Optional[Provider] = None,
+    provider_by_slug: Optional[Provider] = None,
 ) -> Mock:
+    if provider_by_slug is None and provider_id is not None:
+        provider_by_slug = provider()
+        provider_by_slug.id = provider_id
+
     providers = Mock(spec=ProviderRepository)
     providers.find_id_by_slug = AsyncMock(return_value=provider_id)
     providers.get_by_id = AsyncMock(return_value=provider_by_id)
+    providers.get_by_slug = AsyncMock(return_value=provider_by_slug)
     return providers
 
 
@@ -202,9 +208,9 @@ async def test_book_public_appointment_checks_availability_then_books(
 ) -> None:
     caplog.set_level(logging.INFO)
     provider_id = uuid4()
-    start_at = datetime(2026, 6, 10, 9, 0, 42, 123456)
-    expected_requested_start_at = datetime(2026, 6, 10, 9, 0)
-    expected_persisted_start_at = datetime(2026, 6, 10, 9, 0, tzinfo=UTC)
+    start_at = datetime.fromisoformat('2026-06-10T09:00:42.123456-03:00')
+    expected_target_date = datetime(2026, 6, 10).date()
+    expected_persisted_start_at = datetime(2026, 6, 10, 12, 0, tzinfo=UTC)
     existing_offering = offering(provider_id, duration_minutes=30)
     existing_customer = customer()
     appointments = appointment_repository_mock()
@@ -213,7 +219,7 @@ async def test_book_public_appointment_checks_availability_then_books(
         returned_customer=existing_customer,
     )
     available_slots = available_slots_retriever_mock(
-        available_starts=[expected_requested_start_at],
+        available_starts=[expected_persisted_start_at],
     )
     unit_of_work = unit_of_work_mock()
     public_availability_cache = public_availability_cache_mock()
@@ -234,7 +240,7 @@ async def test_book_public_appointment_checks_availability_then_books(
     available_slots.execute.assert_awaited_once_with(
         provider_slug='provider-test',
         offering_id=existing_offering.id,
-        target_date=expected_requested_start_at.date(),
+        target_date=expected_target_date,
     )
     customer_creator_getter.execute.assert_awaited_once()
     appointments.add.assert_awaited_once_with(appointment)
@@ -243,11 +249,11 @@ async def test_book_public_appointment_checks_availability_then_books(
     public_availability_cache.invalidate_slots.assert_awaited_once_with(
         provider_id,
         existing_offering.id,
-        expected_requested_start_at.date(),
+        expected_target_date,
     )
     public_availability_cache.bump_day_version.assert_awaited_once_with(
         provider_id,
-        expected_requested_start_at.date(),
+        expected_target_date,
     )
     unit_of_work.refresh.assert_awaited_once_with(appointment)
     assert appointment.provider_id == provider_id
@@ -280,7 +286,7 @@ async def test_booking_returns_existing_for_same_idempotency_key(
     existing_offering = offering(provider_id)
     payload = booking_payload(
         existing_offering.id,
-        start_at=datetime(2026, 6, 10, 9, 0),
+        start_at=datetime.fromisoformat('2026-06-10T09:00:00-03:00'),
     )
     existing_appointment = appointment(provider_id, existing_offering.id)
     existing_appointment.idempotency_key = 'retry-key'
@@ -291,7 +297,7 @@ async def test_booking_returns_existing_for_same_idempotency_key(
         appointment_by_idempotency_key=existing_appointment,
     )
     available_slots = available_slots_retriever_mock(
-        available_starts=[datetime(2026, 6, 10, 9, 0)],
+        available_starts=[datetime(2026, 6, 10, 12, 0, tzinfo=UTC)],
     )
     customer_creator_getter = customer_creator_getter_mock()
     use_case = build_use_case(
@@ -365,7 +371,7 @@ async def test_book_public_appointment_rejects_reused_idempotency_key(
             'provider-test',
             booking_payload(
                 existing_offering.id,
-                start_at=datetime(2026, 6, 10, 9, 0),
+                start_at=datetime.fromisoformat('2026-06-10T09:00:00-03:00'),
             ),
             'retry-key',
         )
@@ -385,7 +391,7 @@ async def test_book_public_appointment_raises_when_start_is_unavailable(
 ) -> None:
     caplog.set_level(logging.INFO)
     provider_id = uuid4()
-    start_at = datetime(2026, 6, 10, 9, 0)
+    start_at = datetime.fromisoformat('2026-06-10T09:00:00-03:00')
     existing_offering = offering(provider_id)
     appointments = appointment_repository_mock()
     appointment_slots = appointment_slot_repository_mock()
@@ -424,11 +430,11 @@ async def test_book_public_appointment_raises_when_start_is_unavailable(
 
 
 @pytest.mark.asyncio
-async def test_book_public_appointment_rejects_unaligned_start_first() -> None:
+async def test_book_public_appointment_rejects_naive_start_at() -> None:
     provider_id = uuid4()
     existing_offering = offering(provider_id)
     available_slots = available_slots_retriever_mock(
-        available_starts=[datetime(2026, 6, 10, 9, 0)],
+        available_starts=[datetime(2026, 6, 10, 12, 0, tzinfo=UTC)],
     )
     customer_creator_getter = customer_creator_getter_mock()
     use_case = build_use_case(
@@ -443,7 +449,35 @@ async def test_book_public_appointment_rejects_unaligned_start_first() -> None:
             'provider-test',
             booking_payload(
                 existing_offering.id,
-                start_at=datetime(2026, 6, 10, 9, 10),
+                start_at=datetime(2026, 6, 10, 9, 0),
+            ),
+        )
+
+    available_slots.execute.assert_not_awaited()
+    customer_creator_getter.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_book_public_appointment_rejects_unaligned_start_first() -> None:
+    provider_id = uuid4()
+    existing_offering = offering(provider_id)
+    available_slots = available_slots_retriever_mock(
+        available_starts=[datetime(2026, 6, 10, 12, 0, tzinfo=UTC)],
+    )
+    customer_creator_getter = customer_creator_getter_mock()
+    use_case = build_use_case(
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        get_or_create_customer_by_phone=customer_creator_getter,
+        list_provider_available_slots=available_slots,
+    )
+
+    with pytest.raises(InvalidAppointmentStart):
+        await use_case.execute(
+            'provider-test',
+            booking_payload(
+                existing_offering.id,
+                start_at=datetime.fromisoformat('2026-06-10T09:10:00-03:00'),
             ),
         )
 

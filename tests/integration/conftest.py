@@ -106,6 +106,7 @@ async def signup_provider(
     email: Optional[str] = None,
     password: str = 'secure-password',
     display_name: str = 'Provider Test',
+    timezone: str = 'America/Fortaleza',
 ) -> dict:
     response = await client.post(
         '/v1/providers/signup',
@@ -113,6 +114,7 @@ async def signup_provider(
             'email': email or f'{unique_value("provider")}@example.com',
             'password': password,
             'display_name': display_name,
+            'timezone': timezone,
         },
     )
 

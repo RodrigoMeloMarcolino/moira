@@ -2,6 +2,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.modules.appointments.domain.timezones import (
+    InvalidTimezone,
+    resolve_timezone,
+)
 from app.modules.auth.domain.password_policy import (
     MAX_SIGNUP_PASSWORD_LENGTH,
     MIN_SIGNUP_PASSWORD_LENGTH,
@@ -29,6 +33,16 @@ class ProviderSignupCreate(BaseModel):
             raise ValueError(msg)
 
         return normalized
+
+    @field_validator('timezone')
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            resolve_timezone(value)
+        except InvalidTimezone as exc:
+            raise ValueError(str(exc)) from exc
+
+        return value
 
 
 class ProviderPublic(BaseModel):
