@@ -1,8 +1,15 @@
 # Task — endurecer o runtime de logging estruturado
 
-Status: pendente
+Status: todo
 
 Prioridade: média
+
+## Restrição de overhead local
+
+O endurecimento do logging deve manter `stdout` local como caminho padrão e não
+tornar OTLP, Collector, Loki, Grafana, Docker ou rede requisitos para iniciar a
+API ou rodar testes rápidos. A validação do pipeline distribuído deve permanecer
+opt-in, documentada e isolada dos comandos locais básicos.
 
 Origem: revisão pós-implementação do logging estruturado
 
