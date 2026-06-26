@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime, time
+from datetime import date, datetime
 from uuid import UUID
 
 from app.modules.appointments.application.exceptions import (
@@ -9,6 +9,13 @@ from app.modules.appointments.application.output_ports import AppointmentSlotRep
 from app.modules.appointments.domain.slots import (
     build_candidate_slot_starts_for_window,
     build_occupied_slot_starts,
+)
+from app.modules.appointments.domain.timezones import (
+    NonexistentLocalTime,
+    local_naive_to_utc,
+    provider_local_day_bounds_utc,
+    resolve_timezone,
+    to_utc,
 )
 from app.modules.availability.application.exceptions import AvailabilityNotFound
 from app.modules.availability.application.output_ports import AvailabilityRuleRepository
@@ -25,6 +32,7 @@ from app.modules.providers.application.exceptions import (
     ProviderNotFound,
 )
 from app.modules.providers.application.output_ports import ProviderRepository
+from app.shared.application.clock import Clock, SystemUTCClock
 from app.shared.application.unit_of_work import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -151,11 +159,13 @@ class ListProviderAvailableSlotsUseCase:
         offerings: OfferingRepository,
         rules: AvailabilityRuleRepository,
         appointment_slots: AppointmentSlotRepository,
+        clock: Clock | None = None,
     ) -> None:
         self.providers = providers
         self.offerings = offerings
         self.availability_rules = rules
         self.appointment_slots = appointment_slots
+        self.clock = clock or SystemUTCClock()
 
     async def execute(
         self,
@@ -185,8 +195,11 @@ class ListProviderAvailableSlotsUseCase:
             weekday,
         )
 
-        day_start = datetime.combine(target_date, time.min)
-        day_end = datetime.combine(target_date, time.max)
+        provider_timezone = resolve_timezone(provider.timezone)
+        day_start, day_end = provider_local_day_bounds_utc(
+            target_date,
+            provider_timezone,
+        )
 
         occupied_slots = await self.appointment_slots.list_by_provider_and_time_range(
             provider.id,
@@ -195,11 +208,11 @@ class ListProviderAvailableSlotsUseCase:
         )
 
         occupied_slots_starts = {
-            self._normalize_slot_start(occupied_slot.slot_start_at)
-            for occupied_slot in occupied_slots
+            to_utc(occupied_slot.slot_start_at) for occupied_slot in occupied_slots
         }
 
-        available_starts: list[datetime] = []
+        now = to_utc(self.clock.now())
+        available_starts: set[datetime] = set()
 
         for rule in rules:
             candidate_starts = build_candidate_slot_starts_for_window(
@@ -210,8 +223,15 @@ class ListProviderAvailableSlotsUseCase:
             )
 
             for candidate_start in candidate_starts:
+                try:
+                    candidate_start_utc = local_naive_to_utc(
+                        candidate_start,
+                        provider_timezone,
+                    )
+                except NonexistentLocalTime:
+                    continue
                 required_slot_starts = build_occupied_slot_starts(
-                    start_at=candidate_start,
+                    start_at=candidate_start_utc,
                     duration_minutes=offering.duration_minutes,
                 )
 
@@ -220,16 +240,10 @@ class ListProviderAvailableSlotsUseCase:
                     for required_slot_start in required_slot_starts
                 )
 
-                if not has_conflict:
-                    available_starts.append(candidate_start)
+                if not has_conflict and candidate_start_utc >= now:
+                    available_starts.add(candidate_start_utc)
 
         return sorted(available_starts)
-
-    def _normalize_slot_start(self, slot_start_at: datetime) -> datetime:
-        if slot_start_at.tzinfo is None:
-            return slot_start_at
-
-        return slot_start_at.replace(tzinfo=None)
 
 
 class ListPublicProviderAvailableSlotsUseCase:

@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -17,6 +17,12 @@ from app.modules.appointments.application.output_ports import (
 from app.modules.appointments.domain.exceptions import StartOutOfBoundary
 from app.modules.appointments.domain.idempotency import build_idempotency_fingerprint
 from app.modules.appointments.domain.slots import build_occupied_slot_starts
+from app.modules.appointments.domain.timezones import (
+    NaiveDateTime,
+    provider_local_date,
+    resolve_timezone,
+    to_utc,
+)
 from app.modules.appointments.infrastructure.models import Appointment, AppointmentSlot
 from app.modules.appointments.schemas.booking import PublicAppointmentBookingCreate
 from app.modules.availability.application.input_ports import (
@@ -75,12 +81,13 @@ class BookPublicAppointmentUseCase:
                 f'offering not found by offering_id {payload.offering_id}',
             )
 
-        provider_id = await self.providers.find_id_by_slug(provider_slug)
-        if provider_id is None:
+        provider = await self.providers.get_by_slug(provider_slug)
+        if provider is None:
             self._log_rejected('provider_not_found', offering_id=payload.offering_id)
             raise ProviderNotFound(
                 f'provider_id not found by slug {provider_slug}',
             )
+        provider_id = provider.id
 
         if provider_id != offering.provider_id:
             self._log_rejected(
@@ -116,7 +123,20 @@ class BookPublicAppointmentUseCase:
                 self._log_replayed(existing_appointment)
                 return existing_appointment
 
-        requested_start_at = payload.start_at.replace(second=0, microsecond=0)
+        try:
+            requested_start_at = to_utc(
+                payload.start_at.replace(second=0, microsecond=0)
+            )
+        except NaiveDateTime as exc:
+            self._log_rejected(
+                'naive_start_at',
+                provider_id=provider_id,
+                offering_id=offering.id,
+            )
+            raise InvalidAppointmentStart(str(exc)) from exc
+
+        provider_timezone = resolve_timezone(provider.timezone)
+        target_date = provider_local_date(requested_start_at, provider_timezone)
 
         try:
             requested_slot_starts = build_occupied_slot_starts(
@@ -134,7 +154,7 @@ class BookPublicAppointmentUseCase:
         available_starts = await self.list_provider_available_slots.execute(
             provider_slug=provider_slug,
             offering_id=payload.offering_id,
-            target_date=requested_start_at.date(),
+            target_date=target_date,
         )
 
         if requested_start_at not in available_starts:
@@ -157,11 +177,8 @@ class BookPublicAppointmentUseCase:
             )
             await self.uow.flush()
 
-            start_at = self._normalize_persisted_datetime(requested_start_at)
-            slots_starts = [
-                self._normalize_persisted_datetime(slot_start_at)
-                for slot_start_at in requested_slot_starts
-            ]
+            start_at = requested_start_at
+            slots_starts = requested_slot_starts
             end_at = start_at + timedelta(minutes=offering.duration_minutes)
 
             appointment = Appointment(
@@ -207,11 +224,11 @@ class BookPublicAppointmentUseCase:
                 await self.public_availability_cache.invalidate_slots(
                     provider_id,
                     offering.id,
-                    start_at.date(),
+                    target_date,
                 )
                 await self.public_availability_cache.bump_day_version(
                     provider_id,
-                    start_at.date(),
+                    target_date,
                 )
             await self.uow.refresh(appointment)
 
@@ -250,12 +267,6 @@ class BookPublicAppointmentUseCase:
             raise AppointmentBookingConflict(
                 'appointment time is no longer available'
             ) from exc
-
-    def _normalize_persisted_datetime(self, value: datetime) -> datetime:
-        if value.tzinfo is not None:
-            return value
-
-        return value.replace(tzinfo=UTC)
 
     def _log_rejected(
         self,

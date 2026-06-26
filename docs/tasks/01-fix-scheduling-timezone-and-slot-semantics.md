@@ -1,6 +1,6 @@
 # Task — Corrigir semântica de timezone e unicidade dos slots disponíveis
 
-Status: todo
+Status: done
 
 ## Restrição de overhead local
 

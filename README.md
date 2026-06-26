@@ -157,6 +157,34 @@ Rotas publicas para clientes finais ficam sob `/v1/public`, por exemplo:
 - `GET /v1/public/providers/{slug}/available-slots`
 - `POST /v1/public/providers/{slug}/appointments`
 
+### Contrato temporal de agendamento
+
+`Provider.timezone` deve ser um nome IANA valido, como
+`America/Fortaleza`, e governa o calendario local do prestador.
+
+Em `GET /v1/public/providers/{slug}/available-slots`, o parametro `date`
+representa a data local do provider. A resposta contem instantes canonicos em
+UTC com offset, por exemplo:
+
+```json
+["2026-06-10T12:00:00Z"]
+```
+
+Em `POST /v1/public/providers/{slug}/appointments`, `start_at` deve incluir
+offset de timezone. Exemplo:
+
+```json
+{
+  "offering_id": "00000000-0000-0000-0000-000000000000",
+  "start_at": "2026-06-10T09:00:00-03:00",
+  "customer_name": "Customer Test",
+  "customer_phone": "+155500000000"
+}
+```
+
+O backend persiste appointments e slots ocupados como instantes UTC; regras de
+disponibilidade semanal continuam sendo horas locais do provider.
+
 Rotas administrativas autenticadas ficam sob recursos administrativos diretos.
 Nelas, o provider alvo e inferido do token bearer, por exemplo:
 

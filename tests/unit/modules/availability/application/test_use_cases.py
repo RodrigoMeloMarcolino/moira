@@ -38,6 +38,18 @@ from app.modules.providers.infrastructure.models import Provider
 from app.shared.application.unit_of_work import UnitOfWork
 
 
+class FixedClock:
+    def __init__(self, now: datetime) -> None:
+        self._now = now
+
+    def now(self) -> datetime:
+        return self._now
+
+
+def fixed_clock() -> FixedClock:
+    return FixedClock(datetime(2026, 6, 1, 12, 0, tzinfo=UTC))
+
+
 def provider() -> Provider:
     return Provider(
         id=uuid4(),
@@ -346,6 +358,7 @@ async def test_list_provider_available_slots_returns_free_starts_sorted() -> Non
         offerings=offerings,
         rules=rules,
         appointment_slots=appointment_slots,
+        clock=fixed_clock(),
     )
 
     result = await use_case.execute(
@@ -355,8 +368,8 @@ async def test_list_provider_available_slots_returns_free_starts_sorted() -> Non
     )
 
     assert result == [
-        datetime(2026, 6, 10, 8, 0),
-        datetime(2026, 6, 10, 13, 0),
+        datetime(2026, 6, 10, 11, 0, tzinfo=UTC),
+        datetime(2026, 6, 10, 16, 0, tzinfo=UTC),
     ]
     providers.get_by_slug.assert_awaited_once_with(existing_provider.slug)
     offerings.get_active_by_id.assert_awaited_once_with(existing_offering.id)
@@ -366,8 +379,8 @@ async def test_list_provider_available_slots_returns_free_starts_sorted() -> Non
     )
     appointment_slots.list_by_provider_and_time_range.assert_awaited_once_with(
         existing_provider.id,
-        datetime(2026, 6, 10, 0, 0),
-        datetime(2026, 6, 10, 23, 59, 59, 999999),
+        datetime(2026, 6, 10, 3, 0, tzinfo=UTC),
+        datetime(2026, 6, 11, 3, 0, tzinfo=UTC),
     )
 
 
@@ -376,7 +389,9 @@ async def test_list_public_provider_available_slots_returns_cached_slots() -> No
     existing_provider = provider()
     existing_offering = offering(existing_provider.id, duration_minutes=60)
     public_cache = public_availability_cache_mock()
-    public_cache.get_slots = AsyncMock(return_value=[datetime(2026, 6, 10, 9, 0)])
+    public_cache.get_slots = AsyncMock(
+        return_value=[datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
+    )
     fresh_use_case = Mock(spec=ListProviderAvailableSlotsUseCase)
     fresh_use_case.execute = AsyncMock()
     use_case = ListPublicProviderAvailableSlotsUseCase(
@@ -392,7 +407,7 @@ async def test_list_public_provider_available_slots_returns_cached_slots() -> No
         target_date=date(2026, 6, 10),
     )
 
-    assert result == [datetime(2026, 6, 10, 9, 0)]
+    assert result == [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
     fresh_use_case.execute.assert_not_awaited()
 
 
@@ -401,7 +416,7 @@ async def test_list_public_provider_available_slots_caches_fresh_slots() -> None
     existing_provider = provider()
     existing_offering = offering(existing_provider.id, duration_minutes=60)
     public_cache = public_availability_cache_mock()
-    fresh_slots = [datetime(2026, 6, 10, 9, 0)]
+    fresh_slots = [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
     fresh_use_case = Mock(spec=ListProviderAvailableSlotsUseCase)
     fresh_use_case.execute = AsyncMock(return_value=fresh_slots)
     use_case = ListPublicProviderAvailableSlotsUseCase(
@@ -439,13 +454,14 @@ async def test_list_available_slots_removes_partially_conflicting_starts() -> No
     )
     occupied = appointment_slot(
         existing_provider.id,
-        datetime(2026, 6, 10, 10, 0),
+        datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
     )
     use_case = ListProviderAvailableSlotsUseCase(
         providers=provider_repository_mock(provider_by_slug=existing_provider),
         offerings=offering_repository_mock(active_offering=existing_offering),
         rules=availability_rule_repository_mock(active_rules=[rule]),
         appointment_slots=appointment_slot_repository_mock(occupied_slots=[occupied]),
+        clock=fixed_clock(),
     )
 
     result = await use_case.execute(
@@ -454,7 +470,76 @@ async def test_list_available_slots_removes_partially_conflicting_starts() -> No
         target_date=date(2026, 6, 10),
     )
 
-    assert result == [datetime(2026, 6, 10, 9, 0)]
+    assert result == [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
+
+
+@pytest.mark.asyncio
+async def test_list_available_slots_deduplicates_overlapping_rules() -> None:
+    existing_provider = provider()
+    existing_offering = offering(existing_provider.id, duration_minutes=30)
+    first_rule = availability_rule(
+        existing_provider.id,
+        start_time=time(9, 0),
+        end_time=time(10, 0),
+    )
+    second_rule = availability_rule(
+        existing_provider.id,
+        start_time=time(9, 30),
+        end_time=time(10, 30),
+    )
+    use_case = ListProviderAvailableSlotsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        rules=availability_rule_repository_mock(active_rules=[first_rule, second_rule]),
+        appointment_slots=appointment_slot_repository_mock(),
+        clock=fixed_clock(),
+    )
+
+    result = await use_case.execute(
+        provider_slug=existing_provider.slug,
+        offering_id=existing_offering.id,
+        target_date=date(2026, 6, 10),
+    )
+
+    assert result == [
+        datetime(2026, 6, 10, 12, 0, tzinfo=UTC),
+        datetime(2026, 6, 10, 12, 15, tzinfo=UTC),
+        datetime(2026, 6, 10, 12, 30, tzinfo=UTC),
+        datetime(2026, 6, 10, 12, 45, tzinfo=UTC),
+        datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_available_slots_does_not_return_past_slots_for_today() -> None:
+    existing_provider = provider()
+    existing_offering = offering(existing_provider.id, duration_minutes=30)
+    rule = availability_rule(
+        existing_provider.id,
+        start_time=time(9, 0),
+        end_time=time(11, 0),
+    )
+    use_case = ListProviderAvailableSlotsUseCase(
+        providers=provider_repository_mock(provider_by_slug=existing_provider),
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        rules=availability_rule_repository_mock(active_rules=[rule]),
+        appointment_slots=appointment_slot_repository_mock(),
+        clock=FixedClock(datetime(2026, 6, 10, 12, 30, tzinfo=UTC)),
+    )
+
+    result = await use_case.execute(
+        provider_slug=existing_provider.slug,
+        offering_id=existing_offering.id,
+        target_date=date(2026, 6, 10),
+    )
+
+    assert result == [
+        datetime(2026, 6, 10, 12, 30, tzinfo=UTC),
+        datetime(2026, 6, 10, 12, 45, tzinfo=UTC),
+        datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
+        datetime(2026, 6, 10, 13, 15, tzinfo=UTC),
+        datetime(2026, 6, 10, 13, 30, tzinfo=UTC),
+    ]
 
 
 @pytest.mark.asyncio
@@ -468,13 +553,14 @@ async def test_list_available_slots_normalizes_timezone_aware_occupied_slots() -
     )
     occupied = appointment_slot(
         existing_provider.id,
-        datetime(2026, 6, 10, 10, 0, tzinfo=UTC),
+        datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
     )
     use_case = ListProviderAvailableSlotsUseCase(
         providers=provider_repository_mock(provider_by_slug=existing_provider),
         offerings=offering_repository_mock(active_offering=existing_offering),
         rules=availability_rule_repository_mock(active_rules=[rule]),
         appointment_slots=appointment_slot_repository_mock(occupied_slots=[occupied]),
+        clock=fixed_clock(),
     )
 
     result = await use_case.execute(
@@ -483,7 +569,7 @@ async def test_list_available_slots_normalizes_timezone_aware_occupied_slots() -
         target_date=date(2026, 6, 10),
     )
 
-    assert result == [datetime(2026, 6, 10, 9, 0)]
+    assert result == [datetime(2026, 6, 10, 12, 0, tzinfo=UTC)]
 
 
 @pytest.mark.asyncio
@@ -495,6 +581,7 @@ async def test_list_available_slots_returns_empty_when_there_are_no_rules() -> N
         offerings=offering_repository_mock(active_offering=existing_offering),
         rules=availability_rule_repository_mock(),
         appointment_slots=appointment_slot_repository_mock(),
+        clock=fixed_clock(),
     )
 
     result = await use_case.execute(

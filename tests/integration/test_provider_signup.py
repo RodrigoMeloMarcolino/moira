@@ -156,3 +156,17 @@ async def test_signup_provider_rejects_slug_in_body(client: AsyncClient) -> None
     )
 
     assert response.status_code == 422
+
+
+async def test_signup_provider_rejects_invalid_timezone(client: AsyncClient) -> None:
+    response = await client.post(
+        '/v1/providers/signup',
+        json={
+            'email': f'{unique_value("provider")}@example.com',
+            'password': 'secure-password',
+            'display_name': 'Provider Test',
+            'timezone': 'Not/AZone',
+        },
+    )
+
+    assert response.status_code == 422

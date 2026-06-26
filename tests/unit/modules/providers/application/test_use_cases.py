@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.modules.auth.domain.password_policy import SignupPasswordPolicyError
 from app.modules.providers.application import use_cases as provider_use_cases
@@ -32,6 +33,16 @@ def provider_signup_payload(password: str = 'secure-password') -> ProviderSignup
         password=password,
         display_name='Provider Test',
     )
+
+
+def test_provider_signup_payload_rejects_invalid_timezone() -> None:
+    with pytest.raises(ValidationError):
+        ProviderSignupCreate(
+            email='provider@example.com',
+            password='secure-password',
+            display_name='Provider Test',
+            timezone='Not/AZone',
+        )
 
 
 def user() -> User:

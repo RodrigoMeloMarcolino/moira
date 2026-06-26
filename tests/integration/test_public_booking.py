@@ -44,7 +44,7 @@ async def test_public_booking_reuses_same_idempotency_key_payload(
     provider, headers, offering = await _create_bookable_provider(client)
     payload = {
         'offering_id': offering['id'],
-        'start_at': '2026-06-10T09:00:00',
+        'start_at': '2026-07-01T09:00:00-03:00',
         'customer_name': 'Customer Test',
         'customer_phone': unique_phone(),
     }
@@ -79,7 +79,7 @@ async def test_public_booking_rejects_same_idempotency_key_with_other_payload(
     idempotency_headers = {'Idempotency-Key': unique_value('retry')}
     payload = {
         'offering_id': offering['id'],
-        'start_at': '2026-06-10T09:00:00',
+        'start_at': '2026-07-01T09:00:00-03:00',
         'customer_name': 'Customer Test',
         'customer_phone': unique_phone(),
     }
