@@ -10,6 +10,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "fastapi>=0.136.3",
     "opentelemetry-exporter-otlp-proto-http>=1.42.1",
+    "opentelemetry-instrumentation-logging>=0.63b1",
     "opentelemetry-sdk>=1.42.1",
     "pydantic-settings>=2.14.1",
     "pyjwt>=2.13.0",
@@ -40,6 +41,7 @@ ignore = ["UP045"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "integration: tests that require external services such as PostgreSQL"
 ]

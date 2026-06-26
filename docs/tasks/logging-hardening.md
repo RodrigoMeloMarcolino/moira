@@ -1,6 +1,6 @@
 # Task — endurecer o runtime de logging estruturado
 
-Status: todo
+Status: done
 
 Prioridade: média
 
@@ -168,3 +168,56 @@ Adicionar ou ajustar testes para:
 A task estará concluída quando código, testes, validação Docker e documentação
 estiverem alinhados, sem aviso de API depreciada e sem interferência de ciclo de
 vida entre instâncias da aplicação.
+
+## Resultado — 2026-06-26
+
+Implementação concluída em modo assistido.
+
+- `opentelemetry.sdk._logs.LoggingHandler` foi substituído por
+  `opentelemetry.instrumentation.logging.handler.LoggingHandler`, com
+  `opentelemetry-instrumentation-logging` fixado no lockfile na família
+  `0.63b1`, compatível com o OpenTelemetry `1.42.1`.
+- O adapter OTLP preserva `event_name` como campo canônico do log OTLP e evita
+  duplicá-lo em attributes.
+- `_active_runtime` deixou de controlar o ciclo de vida funcional do logging.
+  Cada `FastAPI` encerra somente o `LoggingRuntime` em `app.state`.
+- `shutdown()` tornou-se idempotente e seguro para múltiplas instâncias no mesmo
+  processo.
+- A proteção contra handlers duplicados continua process-wide, destacando
+  handlers antigos do logger raiz sem encerrar o provider de outro runtime.
+- O smoke Collector -> Loki -> Grafana foi executado com sucesso em Docker
+  usando API temporária com `LOG_EXPORTERS=stdout,otlp`.
+
+Validação executada:
+
+```powershell
+$env:UV_CACHE_DIR='.uv-cache'
+uv run pytest tests/unit/shared/infrastructure/observability/logging -q -p no:cacheprovider
+uv run pytest tests/unit/api/middleware/test_request_logging.py -q -p no:cacheprovider
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy app tests/unit
+uv run pytest -m "not integration" -q -p no:cacheprovider
+uv run python scripts/run_integration_tests.py
+docker compose -f docker-compose.observability.yaml up -d
+uv run python scripts/smoke_observability.py
+docker compose -f docker-compose.observability.yaml down
+```
+
+Resultados:
+
+- logging + middleware: 12 testes passando;
+- unitários sem integração: 105 passando, 41 deselecionados;
+- integração: 41 passando, 105 deselecionados;
+- Ruff, format check e Mypy passando;
+- smoke de observabilidade retornou exit code `0`;
+- stack Docker de observabilidade derrubada ao final.
+
+Observação de sincronização:
+
+- A leitura do livedoc foi realizada no início e no fim da task.
+- A tentativa de append do checkpoint no Google Docs foi recusada pelo conector
+  por política de segurança contra exportação de detalhes privados do
+  repositório para destino externo.
+- A sincronização do livedoc permanece como follow-up e requer aprovação
+  explícita do usuário no próprio fluxo do conector.

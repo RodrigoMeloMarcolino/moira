@@ -1,6 +1,6 @@
 # Especificação — logging estruturado e correlação de requisições
 
-Status: implementado; validação Docker pendente por limitação do ambiente
+Status: implementado; hardening operacional validado em Docker
 
 Modo: implementação assistida por IA
 
@@ -615,6 +615,40 @@ uv run python scripts/run_integration_tests.py
 - **Acoplamento transversal:** não injetar logger em todos os use cases nem
   centralizar eventos de vários domínios em um serviço compartilhado.
 
+## Hardening operacional — 2026-06-26
+
+O runtime de logging foi endurecido sem alterar o contrato público de logs.
+
+- O handler OTLP depreciado do pacote `opentelemetry.sdk._logs` foi substituído
+  pelo handler suportado de `opentelemetry-instrumentation-logging`.
+- A integração OTLP continua isolada no adapter de infraestrutura e preserva
+  `event_name`, resource, attributes, redaction, batching, timeout e fail-open.
+- O ciclo de vida deixou de depender de `_active_runtime`: cada aplicação encerra
+  apenas o `LoggingRuntime` armazenado em seu próprio `app.state`.
+- `shutdown()` é idempotente e não remove handlers pertencentes a uma instância
+  mais nova da aplicação no mesmo processo.
+- A validação Docker Collector -> Loki -> Grafana foi executada com sucesso via
+  `scripts/smoke_observability.py`, com ingestão consultada pelo proxy do
+  Grafana usando `correlation_id`.
+
+Validação executada:
+
+```powershell
+uv run pytest tests/unit/shared/infrastructure/observability/logging -q -p no:cacheprovider
+uv run pytest tests/unit/api/middleware/test_request_logging.py -q -p no:cacheprovider
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy app tests/unit
+uv run pytest -m "not integration" -q -p no:cacheprovider
+uv run python scripts/run_integration_tests.py
+docker compose -f docker-compose.observability.yaml up -d
+uv run python scripts/smoke_observability.py
+docker compose -f docker-compose.observability.yaml down
+```
+
+O README e o ADR 0015 não exigiram alteração: comandos, variáveis de ambiente,
+contrato operacional e decisão arquitetural permaneceram os mesmos.
+
 ## ADR e follow-ups
 
 A interoperabilidade OTLP e a regra de manter fornecedores fora do core são uma
@@ -627,11 +661,11 @@ decisão arquitetural nova. O ADR 0015 deve registrar:
 - fail-open, batch, cardinalidade e proteção de dados;
 - proibição de SDK proprietário nos módulos de negócio.
 
-Sincronização do livedoc: a leitura do checkpoint foi concluída e uma atualização
-foi preparada ao final da implementação, mas a escrita no Google Docs foi
-recusada pelo controle de segurança do conector por envolver publicação externa
-do estado privado do repositório. A sincronização permanece como follow-up e
-exige aprovação explícita do usuário após esse aviso.
+Sincronização do livedoc: a leitura do checkpoint foi concluída no início e no
+fim da implementação. A tentativa de escrita no Google Docs foi recusada pelo
+conector por política de segurança contra exportação de detalhes privados do
+repositório para destino externo. A sincronização permanece como follow-up e
+exige aprovação explícita do usuário no próprio fluxo do conector.
 
 Follow-ups posteriores:
 
