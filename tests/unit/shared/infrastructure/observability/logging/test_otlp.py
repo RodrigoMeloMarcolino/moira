@@ -89,3 +89,26 @@ def test_otlp_headers_are_percent_decoded() -> None:
         'authorization': 'Bearer token',
         'x-id': '123',
     }
+
+
+def test_unavailable_otlp_endpoint_keeps_stdout_available(monkeypatch) -> None:
+    output = io.StringIO()
+    monkeypatch.setattr('sys.stdout', output)
+    runtime = configure_logging(
+        Settings.model_validate(
+            {
+                'LOG_EXPORTERS': 'stdout,otlp',
+                'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT': 'http://127.0.0.1:1/v1/logs',
+                'OTEL_EXPORTER_OTLP_TIMEOUT': 0.1,
+            }
+        )
+    )
+
+    logging.getLogger('test.otlp').warning(
+        'Remote unavailable',
+        extra={'event_name': 'logging.remote_unavailable'},
+    )
+    runtime.shutdown()
+
+    lines = [line for line in output.getvalue().splitlines() if line]
+    assert len(lines) == 1

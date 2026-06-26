@@ -17,7 +17,6 @@ from app.shared.infrastructure.observability.logging.formatters import (
 from app.shared.infrastructure.observability.logging.otlp import build_otlp_handler
 
 HANDLER_MARKER = '_moira_logging_handler'
-_active_runtime: LoggingRuntime | None = None
 
 
 @dataclass
@@ -25,8 +24,13 @@ class LoggingRuntime:
     provider: LoggerProvider | None = None
     shutdown_timeout_millis: int = 5000
     handlers: tuple[logging.Handler, ...] = ()
+    _shutdown: bool = False
 
     def shutdown(self) -> None:
+        if self._shutdown:
+            return
+        self._shutdown = True
+
         root_logger = logging.getLogger()
         for handler in self.handlers:
             if handler in root_logger.handlers:
@@ -65,24 +69,18 @@ def resource_attributes(settings: Settings) -> dict[str, str]:
     }
 
 
-def _remove_existing_handlers(logger: logging.Logger) -> None:
+def _detach_existing_handlers(logger: logging.Logger) -> None:
     for handler in list(logger.handlers):
         if getattr(handler, HANDLER_MARKER, False):
             logger.removeHandler(handler)
-            handler.close()
 
 
 def configure_logging(settings: Settings) -> LoggingRuntime:
-    global _active_runtime
-
-    if _active_runtime is not None:
-        _active_runtime.shutdown()
-
     level = getattr(logging, settings.log_level)
     attributes = resource_attributes(settings)
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
-    _remove_existing_handlers(root_logger)
+    _detach_existing_handlers(root_logger)
 
     context_filter = CanonicalLogFilter()
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -130,9 +128,8 @@ def configure_logging(settings: Settings) -> LoggingRuntime:
     uvicorn_error.propagate = True
     uvicorn_error.disabled = False
 
-    _active_runtime = LoggingRuntime(
+    return LoggingRuntime(
         provider=provider,
         shutdown_timeout_millis=int(settings.otel_exporter_otlp_timeout * 1000),
         handlers=tuple(handlers),
     )
-    return _active_runtime
