@@ -53,6 +53,27 @@ async def test_validation_errors_use_error_envelope(client: AsyncClient) -> None
     assert body['error']['details']
 
 
+async def test_invalid_idempotency_key_uses_validation_error(
+    client: AsyncClient,
+) -> None:
+    response = await client.post(
+        f'/v1/public/providers/{unique_value("provider")}/appointments',
+        headers={'Idempotency-Key': 'invalid key with spaces'},
+        json={
+            'offering_id': '00000000-0000-0000-0000-000000000001',
+            'start_at': '2026-06-10T09:00:00',
+            'customer_name': 'Customer Test',
+            'customer_phone': '+155500000000',
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body['error']['code'] == 'validation_error'
+    assert body['error']['message'] == 'request validation failed'
+    assert body['error']['details']
+
+
 async def test_valid_correlation_id_is_preserved(client: AsyncClient) -> None:
     response = await client.get(
         '/v1/health', headers={'X-Correlation-ID': 'integration-operation-123'}

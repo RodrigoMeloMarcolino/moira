@@ -1,13 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from app.api.deps import (
     GetPublicProviderBySlugUseCaseDep,
     SignupProviderUseCaseDep,
-)
-from app.modules.providers.application.exceptions import (
-    ProviderEmailAlreadyExists,
-    ProviderNotFound,
-    ProviderSignupConflict,
 )
 from app.modules.providers.infrastructure.models import Provider
 from app.modules.providers.schemas.catalog import (
@@ -28,18 +23,7 @@ async def signup_provider_account(
     payload: ProviderSignupCreate,
     use_case: SignupProviderUseCaseDep,
 ) -> Provider:
-    try:
-        return await use_case.execute(payload)
-    except ProviderEmailAlreadyExists as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='email already exists',
-        ) from exc
-    except ProviderSignupConflict as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='provider signup conflict',
-        ) from exc
+    return await use_case.execute(payload)
 
 
 @providers_router.get('/public/providers/{slug}', response_model=ProviderCatalogPublic)
@@ -47,10 +31,4 @@ async def get_provider_by_slug(
     slug: str,
     use_case: GetPublicProviderBySlugUseCaseDep,
 ) -> ProviderCatalogPublic:
-    try:
-        return await use_case.execute(slug)
-    except ProviderNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='provider not found',
-        ) from exc
+    return await use_case.execute(slug)

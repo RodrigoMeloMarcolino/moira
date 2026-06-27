@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
     CreateAvailabilityRuleUseCaseDep,
@@ -11,20 +11,11 @@ from app.api.deps import (
     ListPublicProviderAvailableSlotsUseCaseDep,
     UpdateProviderAvailabilityRuleUseCaseDep,
 )
-from app.modules.appointments.application.exceptions import (
-    OfferingDoesNotBelongToProvider,
-)
-from app.modules.availability.application.exceptions import AvailabilityNotFound
 from app.modules.availability.infrastructure.models import AvailabilityRule
 from app.modules.availability.schemas.availability_rules import (
     AvailabilityRuleCreate,
     AvailabilityRulePublic,
     AvailabilityRuleUpdate,
-)
-from app.modules.offerings.application.exceptions import OfferingNotFound
-from app.modules.providers.application.exceptions import (
-    ProviderAccessForbidden,
-    ProviderNotFound,
 )
 
 availability_router = APIRouter(tags=['availability'])
@@ -69,18 +60,7 @@ async def update_provider_availability_rule(
     use_case: UpdateProviderAvailabilityRuleUseCaseDep,
     current_provider: CurrentProviderDep,
 ) -> AvailabilityRule:
-    try:
-        return await use_case.execute(rule_id, payload, current_provider.id)
-    except AvailabilityNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='availability rule not found',
-        ) from exc
-    except ProviderAccessForbidden as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='provider access forbidden',
-        ) from exc
+    return await use_case.execute(rule_id, payload, current_provider.id)
 
 
 @availability_router.get(
@@ -93,24 +73,8 @@ async def list_provider_available_slots(
     offering_id: Annotated[UUID, Query()],
     target_date: Annotated[date, Query(alias='date')],
 ) -> list[datetime]:
-    try:
-        return await use_case.execute(
-            provider_slug=provider_slug,
-            offering_id=offering_id,
-            target_date=target_date,
-        )
-    except ProviderNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='provider not found',
-        ) from exc
-    except OfferingNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='offering not found',
-        ) from exc
-    except OfferingDoesNotBelongToProvider as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='offering does not belong to provider',
-        ) from exc
+    return await use_case.execute(
+        provider_slug=provider_slug,
+        offering_id=offering_id,
+        target_date=target_date,
+    )

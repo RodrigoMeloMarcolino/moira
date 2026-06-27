@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.middleware.request_logging import RequestLoggingMiddleware
@@ -63,6 +64,20 @@ def create_app() -> FastAPI:
     app.state.cache_backend = NullCache()
     app.state.redis_client = None
     app.state.logging_runtime = logging_runtime
+
+    if settings.cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_allowed_origins,
+            allow_credentials=True,
+            allow_methods=['GET', 'POST', 'PATCH'],
+            allow_headers=[
+                'Authorization',
+                'Content-Type',
+                'Idempotency-Key',
+                'X-Correlation-ID',
+            ],
+        )
 
     register_exception_handlers(app)
     app.add_middleware(RequestLoggingMiddleware)

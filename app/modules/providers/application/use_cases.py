@@ -29,10 +29,12 @@ class SignupProviderUseCase:
         create_user: UserCreator,
         providers: ProviderRepository,
         unit_of_work: UnitOfWork,
+        default_timezone: str,
     ) -> None:
         self.create_user = create_user
         self.providers = providers
         self.unit_of_work = unit_of_work
+        self.default_timezone = default_timezone
 
     async def execute(self, payload: ProviderSignupCreate) -> Provider:
         validate_signup_password(payload.password)
@@ -68,7 +70,7 @@ class SignupProviderUseCase:
                 user_id=user.id,
                 display_name=payload.display_name,
                 slug=slug,
-                timezone=payload.timezone,
+                timezone=payload.timezone or self.default_timezone,
                 currency_code=payload.currency_code,
             )
             await self.providers.add(provider)

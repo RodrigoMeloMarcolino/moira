@@ -261,7 +261,7 @@ async def get_current_provider(
 
     try:
         user_id = container.access_tokens.verify_access_token(credentials.credentials)
-    except InvalidAccessToken as exc:
+    except InvalidAccessToken:
         logger.info(
             'Access rejected because the token is invalid',
             extra={
@@ -269,10 +269,7 @@ async def get_current_provider(
                 'reason': 'invalid_token',
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='invalid access token',
-        ) from exc
+        raise
 
     user = await container.users.get_by_id(user_id)
     if user is None:
@@ -312,10 +309,12 @@ CurrentProviderDep = Annotated[Provider, Depends(get_current_provider)]
 def build_signup_provider_use_case(
     container: RequestContainerDep,
 ) -> SignupProviderUseCase:
+    settings = get_settings()
     return SignupProviderUseCase(
         create_user=container.create_user_use_case,
         providers=container.providers,
         unit_of_work=container.unit_of_work,
+        default_timezone=settings.default_timezone,
     )
 
 

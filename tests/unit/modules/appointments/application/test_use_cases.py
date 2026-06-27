@@ -7,7 +7,9 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.modules.appointments.application.exceptions import (
+    AppointmentBookingConflict,
     AppointmentIdempotencyConflict,
+    AppointmentPersistenceConflict,
     AppointmentStartUnavailable,
     InvalidAppointmentStart,
 )
@@ -32,6 +34,10 @@ from app.modules.offerings.application.output_ports import OfferingRepository
 from app.modules.offerings.infrastructure.models import Offering
 from app.modules.providers.application.output_ports import ProviderRepository
 from app.modules.providers.infrastructure.models import Provider
+from app.shared.application.exceptions import (
+    UnitOfWorkConflict,
+    UnitOfWorkConflictCategory,
+)
 from app.shared.application.unit_of_work import UnitOfWork
 
 
@@ -217,6 +223,14 @@ async def test_book_public_appointment_checks_availability_then_books(
     )
     unit_of_work = unit_of_work_mock()
     public_availability_cache = public_availability_cache_mock()
+    side_effects: list[str] = []
+    unit_of_work.refresh.side_effect = lambda _: side_effects.append('refresh')
+    public_availability_cache.invalidate_slots.side_effect = lambda *_: (
+        side_effects.append('invalidate_slots')
+    )
+    public_availability_cache.bump_day_version.side_effect = lambda *_: (
+        side_effects.append('bump_day_version')
+    )
     use_case = build_use_case(
         appointments=appointments,
         offerings=offering_repository_mock(active_offering=existing_offering),
@@ -250,6 +264,7 @@ async def test_book_public_appointment_checks_availability_then_books(
         expected_requested_start_at.date(),
     )
     unit_of_work.refresh.assert_awaited_once_with(appointment)
+    assert side_effects == ['refresh', 'invalidate_slots', 'bump_day_version']
     assert appointment.provider_id == provider_id
     assert appointment.offering_id == existing_offering.id
     assert appointment.customer_id == existing_customer.id
@@ -311,6 +326,206 @@ async def test_booking_returns_existing_for_same_idempotency_key(
     assert 'appointment.booking_replayed' in {
         getattr(record, 'event_name', None) for record in caplog.records
     }
+
+
+@pytest.mark.asyncio
+async def test_booking_retries_once_after_concurrent_customer_phone_conflict() -> None:
+    provider_id = uuid4()
+    start_at = datetime(2026, 6, 10, 9, 0)
+    existing_offering = offering(provider_id)
+    first_customer = customer()
+    reloaded_customer = customer()
+    appointments = appointment_repository_mock()
+    appointment_slots = appointment_slot_repository_mock()
+    customer_creator_getter = customer_creator_getter_mock()
+    customer_creator_getter.execute.side_effect = [first_customer, reloaded_customer]
+    unit_of_work = unit_of_work_mock()
+    unit_of_work.flush.side_effect = [
+        UnitOfWorkConflict(
+            reason='unique_violation',
+            category=UnitOfWorkConflictCategory.CUSTOMER_PHONE_UNIQUE,
+            constraint_name='uq_customers_phone',
+        ),
+        None,
+        None,
+    ]
+    use_case = build_use_case(
+        appointments=appointments,
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        appointment_slots=appointment_slots,
+        get_or_create_customer_by_phone=customer_creator_getter,
+        list_provider_available_slots=available_slots_retriever_mock(
+            available_starts=[start_at],
+        ),
+        uow=unit_of_work,
+    )
+
+    result = await use_case.execute(
+        'provider-test',
+        booking_payload(existing_offering.id, start_at=start_at),
+    )
+
+    assert result.customer_id == reloaded_customer.id
+    assert customer_creator_getter.execute.await_count == 2
+    unit_of_work.rollback.assert_awaited_once_with()
+    unit_of_work.commit.assert_awaited_once_with()
+    appointments.add.assert_awaited_once_with(result)
+    appointment_slots.add_many.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_booking_replays_after_idempotency_constraint_conflict() -> None:
+    provider_id = uuid4()
+    start_at = datetime(2026, 6, 10, 9, 0)
+    existing_offering = offering(provider_id)
+    payload = booking_payload(existing_offering.id, start_at=start_at)
+    existing_appointment = appointment(provider_id, existing_offering.id)
+    existing_appointment.idempotency_key = 'retry-key'
+    existing_appointment.idempotency_fingerprint = build_idempotency_fingerprint(
+        payload.model_dump(mode='json')
+    )
+    appointments = appointment_repository_mock()
+    appointments.get_by_provider_id_and_idempotency_key.side_effect = [
+        None,
+        existing_appointment,
+    ]
+    unit_of_work = unit_of_work_mock()
+    unit_of_work.flush.side_effect = [
+        None,
+        UnitOfWorkConflict(
+            reason='unique_violation',
+            category=UnitOfWorkConflictCategory.APPOINTMENT_IDEMPOTENCY_KEY_UNIQUE,
+            constraint_name='uq_appointments_provider_idempotency_key',
+        ),
+    ]
+    use_case = build_use_case(
+        appointments=appointments,
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        list_provider_available_slots=available_slots_retriever_mock(
+            available_starts=[start_at],
+        ),
+        uow=unit_of_work,
+    )
+
+    result = await use_case.execute('provider-test', payload, 'retry-key')
+
+    assert result is existing_appointment
+    assert appointments.get_by_provider_id_and_idempotency_key.await_count == 2
+    unit_of_work.rollback.assert_awaited_once_with()
+    unit_of_work.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_booking_maps_only_slot_constraint_to_booking_conflict() -> None:
+    provider_id = uuid4()
+    start_at = datetime(2026, 6, 10, 9, 0)
+    existing_offering = offering(provider_id)
+    unit_of_work = unit_of_work_mock()
+    unit_of_work.commit.side_effect = UnitOfWorkConflict(
+        reason='unique_violation',
+        category=UnitOfWorkConflictCategory.APPOINTMENT_SLOT_UNIQUE,
+        constraint_name='uq_appointment_slots_provider_slot_start',
+    )
+    use_case = build_use_case(
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        list_provider_available_slots=available_slots_retriever_mock(
+            available_starts=[start_at],
+        ),
+        uow=unit_of_work,
+    )
+
+    with pytest.raises(AppointmentBookingConflict):
+        await use_case.execute(
+            'provider-test',
+            booking_payload(existing_offering.id, start_at=start_at),
+        )
+
+    unit_of_work.rollback.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_booking_unknown_integrity_conflict_is_not_slot_conflict(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.ERROR)
+    provider_id = uuid4()
+    start_at = datetime(2026, 6, 10, 9, 0)
+    existing_offering = offering(provider_id)
+    unit_of_work = unit_of_work_mock()
+    unit_of_work.commit.side_effect = UnitOfWorkConflict(
+        reason='integrity_error',
+        category=UnitOfWorkConflictCategory.UNKNOWN_INTEGRITY,
+        constraint_name='ck_unknown_constraint',
+    )
+    use_case = build_use_case(
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        list_provider_available_slots=available_slots_retriever_mock(
+            available_starts=[start_at],
+        ),
+        uow=unit_of_work,
+    )
+
+    with pytest.raises(AppointmentPersistenceConflict):
+        await use_case.execute(
+            'provider-test',
+            booking_payload(existing_offering.id, start_at=start_at),
+            'retry-key',
+        )
+
+    conflict = next(
+        record
+        for record in caplog.records
+        if getattr(record, 'event_name', None)
+        == 'appointment.booking_integrity_conflict'
+    )
+    assert conflict.__dict__['reason'] == 'unknown_integrity_conflict'
+    assert conflict.__dict__['uow.category'] == (
+        UnitOfWorkConflictCategory.UNKNOWN_INTEGRITY
+    )
+    assert '+155500000000' not in caplog.text
+    assert 'retry-key' not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_booking_cache_failure_after_commit_is_fail_open(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING)
+    provider_id = uuid4()
+    start_at = datetime(2026, 6, 10, 9, 0)
+    existing_offering = offering(provider_id)
+    public_availability_cache = public_availability_cache_mock()
+    public_availability_cache.invalidate_slots.side_effect = RuntimeError(
+        'redis://secret-cache-url'
+    )
+    use_case = build_use_case(
+        offerings=offering_repository_mock(active_offering=existing_offering),
+        providers=provider_repository_mock(provider_id=provider_id),
+        list_provider_available_slots=available_slots_retriever_mock(
+            available_starts=[start_at],
+        ),
+        public_availability_cache=public_availability_cache,
+    )
+
+    result = await use_case.execute(
+        'provider-test',
+        booking_payload(existing_offering.id, start_at=start_at),
+    )
+
+    assert isinstance(result, Appointment)
+    public_availability_cache.bump_day_version.assert_not_awaited()
+    failed = next(
+        record
+        for record in caplog.records
+        if getattr(record, 'event_name', None)
+        == 'appointment.cache_invalidation_failed'
+    )
+    assert failed.__dict__['reason'] == 'RuntimeError'
+    assert 'redis://secret-cache-url' not in caplog.text
 
 
 @pytest.mark.asyncio

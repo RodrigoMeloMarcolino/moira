@@ -23,8 +23,8 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def _is_redis_connection_error(exc: Exception) -> bool:
-    if isinstance(exc, (OSError, RuntimeError)):
+def _is_expected_redis_backend_error(exc: Exception) -> bool:
+    if isinstance(exc, OSError):
         return True
 
     return RedisLibraryError is not None and isinstance(exc, RedisLibraryError)
@@ -60,6 +60,8 @@ class RedisCache:
         try:
             return await self.client.get(key)
         except Exception as exc:
+            if not _is_expected_redis_backend_error(exc):
+                raise
             self._log_failure('get', key, exc)
             return None
 
@@ -72,18 +74,24 @@ class RedisCache:
         try:
             await self.client.set(key, value, ex=ttl_seconds)
         except Exception as exc:
+            if not _is_expected_redis_backend_error(exc):
+                raise
             self._log_failure('set', key, exc)
 
     async def delete(self, key: str) -> None:
         try:
             await self.client.delete(key)
         except Exception as exc:
+            if not _is_expected_redis_backend_error(exc):
+                raise
             self._log_failure('delete', key, exc)
 
     async def incr(self, key: str) -> int:
         try:
             return int(await self.client.incr(key))
         except Exception as exc:
+            if not _is_expected_redis_backend_error(exc):
+                raise
             self._log_failure('incr', key, exc)
             return 1
 
@@ -131,12 +139,13 @@ async def build_cache_backend(settings: Settings) -> tuple[AsyncCache, Any | Non
         )
         return NullCache(), None
 
-    client = redis.from_url(settings.redis_url, decode_responses=True)
+    redis_url = settings.redis_url.get_secret_value()
+    client = redis.from_url(redis_url, decode_responses=True)
 
     try:
         await client.ping()
     except Exception as exc:
-        if not _is_redis_connection_error(exc):
+        if not _is_expected_redis_backend_error(exc):
             raise
 
         logger.warning(

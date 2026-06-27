@@ -81,11 +81,13 @@ def signup_use_case(
     create_user: Optional[Mock] = None,
     providers: Optional[Mock] = None,
     unit_of_work: Optional[Mock] = None,
+    default_timezone: str = 'America/Fortaleza',
 ) -> SignupProviderUseCase:
     return SignupProviderUseCase(
         create_user=create_user or user_creator_mock(),
         providers=providers or provider_repository_mock(),
         unit_of_work=unit_of_work or unit_of_work_mock(),
+        default_timezone=default_timezone,
     )
 
 
@@ -133,6 +135,57 @@ async def test_signup_provider_creates_user_and_provider(
     assert 'provider.signup_succeeded' in {
         getattr(record, 'event_name', None) for record in caplog.records
     }
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_uses_injected_default_timezone_when_payload_omits_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_case = signup_use_case(default_timezone='America/Sao_Paulo')
+
+    monkeypatch.setattr(
+        provider_use_cases,
+        'generate_provider_slug',
+        lambda display_name: 'provider-test-a1b2c3d4',
+    )
+
+    provider = await use_case.execute(provider_signup_payload())
+
+    assert provider.timezone == 'America/Sao_Paulo'
+
+
+@pytest.mark.asyncio
+async def test_signup_provider_preserves_payload_timezone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_case = signup_use_case(default_timezone='America/Sao_Paulo')
+
+    monkeypatch.setattr(
+        provider_use_cases,
+        'generate_provider_slug',
+        lambda display_name: 'provider-test-a1b2c3d4',
+    )
+
+    provider = await use_case.execute(
+        ProviderSignupCreate(
+            email='provider@example.com',
+            password='secure-password',
+            display_name='Provider Test',
+            timezone='America/Fortaleza',
+        )
+    )
+
+    assert provider.timezone == 'America/Fortaleza'
+
+
+def test_signup_payload_rejects_invalid_timezone() -> None:
+    with pytest.raises(ValueError):
+        ProviderSignupCreate(
+            email='provider@example.com',
+            password='secure-password',
+            display_name='Provider Test',
+            timezone='Fortaleza',
+        )
 
 
 @pytest.mark.asyncio

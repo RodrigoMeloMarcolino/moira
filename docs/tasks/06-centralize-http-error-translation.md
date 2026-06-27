@@ -1,6 +1,37 @@
 # Task — Centralizar a tradução tipada de erros de aplicação para HTTP
 
-Status: todo
+Status: done on 2026-06-26
+
+## Checkpoint de implementacao - 2026-06-26
+
+Modo: assisted implementation com subagent Worker B e integracao final.
+
+Implementado:
+
+- `app/api/exception_handlers.py` passou a registrar uma tabela tipada de
+  excecoes de aplicacao conhecidas para status, code, message e details.
+- Routers de auth, providers, offerings, availability e appointments deixaram
+  de traduzir excecoes de aplicacao com `try/except` repetitivo.
+- `InvalidAccessToken` preserva logging no dependency de autenticacao e flui
+  para o handler central.
+- Handlers de `HTTPException` e `RequestValidationError` foram preservados; para
+  erros conhecidos, o code publico nao depende mais da mensagem humana.
+- Foram adicionados testes unitarios para garantir mapeamento estavel e que
+  mudanca editorial em mensagem interna nao altera o code publico.
+
+Validacao executada:
+
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy app tests/unit`
+- `uv run pytest -m "not integration" -q`
+- `uv run python scripts/run_integration_tests.py`
+
+Resultado integrado: 146 testes nao-integracao passaram, 43 testes de
+integracao passaram. O envelope do ADR 0014 foi preservado.
+
+Livedoc: Google Docs externo nao foi atualizado por falta de autorizacao
+explicita; este checkpoint local deve ser sincronizado na task 09.
 
 ## Restrição de overhead local
 

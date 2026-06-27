@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from app.api.deps import (
     CreateOfferingUseCaseDep,
@@ -9,16 +9,11 @@ from app.api.deps import (
     ListPublicProviderOfferingsUseCaseDep,
     UpdateOfferingUseCaseDep,
 )
-from app.modules.offerings.application.exceptions import OfferingNotFound
 from app.modules.offerings.infrastructure.models import Offering
 from app.modules.offerings.schemas.catalog import (
     OfferingCreate,
     OfferingPublic,
     OfferingUpdate,
-)
-from app.modules.providers.application.exceptions import (
-    ProviderAccessForbidden,
-    ProviderNotFound,
 )
 
 offerings_router = APIRouter(tags=['offerings'])
@@ -45,13 +40,7 @@ async def list_active_provider_offerings(
     slug: str,
     use_case: ListPublicProviderOfferingsUseCaseDep,
 ) -> list[OfferingPublic]:
-    try:
-        return await use_case.execute(slug)
-    except ProviderNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='provider not found',
-        ) from exc
+    return await use_case.execute(slug)
 
 
 @offerings_router.get(
@@ -75,15 +64,4 @@ async def update_offering(
     use_case: UpdateOfferingUseCaseDep,
     current_provider: CurrentProviderDep,
 ) -> Offering:
-    try:
-        return await use_case.execute(offering_id, payload, current_provider.id)
-    except OfferingNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='offering not found',
-        ) from exc
-    except ProviderAccessForbidden as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='provider access forbidden',
-        ) from exc
+    return await use_case.execute(offering_id, payload, current_provider.id)

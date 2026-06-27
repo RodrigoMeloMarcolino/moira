@@ -1,6 +1,50 @@
 # Task — Alinhar configuração de runtime com comportamento real e seguro
 
-Status: todo
+Status: done on 2026-06-26
+
+## Checkpoint de implementacao - 2026-06-26
+
+Modo: assisted implementation com subagent Worker C e integracao final.
+
+Implementado:
+
+- `CORSMiddleware` passa a ser instalado somente quando `CORS_ALLOWED_ORIGINS`
+  contem origens configuradas, com methods/headers restritos ao uso atual da
+  API bearer.
+- `DEFAULT_TIMEZONE` passa por validacao IANA em `Settings`.
+- `ProviderSignupCreate.timezone` ficou opcional; `SignupProviderUseCase`
+  recebe `default_timezone` por injecao em `app/api/deps.py` e usa esse valor
+  quando o payload omite timezone.
+- `JWT_SECRET_KEY` default/fraco e rejeitado fora de `local` e `test`, e
+  `JWT_ALGORITHM` fica limitado ao allowlist suportado pelo codec atual.
+- Expiracao JWT, timeout OTLP e TTLs de cache receberam limites positivos e
+  maximos.
+- `redis_url` passou a `SecretStr`; `build_cache_backend` explicita
+  `get_secret_value()` no limite de infraestrutura.
+- `RedisCache` continua fail-open para falhas esperadas de backend Redis/socket,
+  mas propaga erros de programacao como `RuntimeError`.
+- README e `.env.example` foram ajustados com o comportamento de runtime.
+
+Validacao executada:
+
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy app tests/unit`
+- `uv run pytest -m "not integration" -q`
+- `uv run python scripts/run_integration_tests.py`
+
+Resultado integrado: 146 testes nao-integracao passaram, 43 testes de
+integracao passaram. Permanece apenas warning local do pytest cache por
+permissao de `.pytest_cache` no ambiente Windows.
+
+Notas de integracao:
+
+- `app/api/deps.py` tambem recebeu a alteracao paralela da task 06 para
+  `InvalidAccessToken`; o resultado integrado preserva logging de autenticacao
+  e traducao centralizada.
+- Nenhum ADR novo foi identificado como necessario para esta task.
+- Google Docs externo nao foi atualizado por falta de autorizacao explicita;
+  este checkpoint local deve ser sincronizado na task 09.
 
 ## Restrição de overhead local
 

@@ -146,6 +146,16 @@ A senha nunca deve ser retornada pela API. O backend armazena apenas
 O login do provider e feito em `POST /v1/auth/login`. Endpoints
 administrativos exigem `Authorization: Bearer <access_token>`.
 
+## Configuracao de runtime
+
+`CORS_ALLOWED_ORIGINS` instala CORS somente quando possui uma lista nao vazia de
+origens permitidas. `DEFAULT_TIMEZONE` deve ser um timezone IANA valido e e
+usado como padrao no cadastro de provider quando o payload omite `timezone`.
+
+Fora de `local` e `test`, `JWT_SECRET_KEY` deve ser substituido por um segredo
+forte e unico de pelo menos 32 caracteres. O algoritmo JWT suportado nesta fase
+e `HS256`.
+
 ## Contratos HTTP
 
 A API atual e exposta somente sob `/v1`.

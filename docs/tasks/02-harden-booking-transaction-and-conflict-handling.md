@@ -1,6 +1,46 @@
 # Task — Endurecer a transação e a classificação de conflitos do booking
 
-Status: todo
+Status: done on 2026-06-26
+
+## Checkpoint de implementacao - 2026-06-26
+
+Modo: assisted implementation com subagent Worker A e integracao final.
+
+Implementado:
+
+- `UnitOfWorkConflict` passou a carregar `reason`, `category` e
+  `constraint_name`, classificados no adapter SQLAlchemy para
+  `uq_customers_phone`, `uq_appointment_slots_provider_slot_start` e
+  `uq_appointments_provider_idempotency_key`.
+- `BookPublicAppointmentUseCase` foi separado em etapas internas de contexto,
+  replay idempotente, preparo de slots/disponibilidade e persistencia atomica,
+  mantendo o use case como entrada do fluxo.
+- Replay/mismatch de idempotencia acontece antes de disponibilidade e antes de
+  criar customer, preservando retry seguro.
+- Conflito concorrente em `uq_customers_phone` faz rollback e retry limitado,
+  permitindo duas reservas com mesmo telefone em slots diferentes.
+- Conflito em slot vira `AppointmentBookingConflict`; conflito de idempotencia
+  faz replay ou mismatch deterministico; conflito desconhecido vira
+  `AppointmentPersistenceConflict` e nao e rotulado como slot indisponivel.
+- A resposta e materializada com `refresh` depois do commit; invalidacao de
+  cache ocorre depois e e fail-open, sem alterar sucesso ja confirmado.
+- `Idempotency-Key` continua opcional, mas quando presente e validado no header
+  com 1 a 128 caracteres e somente `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, `-`.
+
+Validacao executada:
+
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy app tests/unit`
+- `uv run pytest -m "not integration" -q`
+- `uv run python scripts/run_integration_tests.py`
+
+Resultado integrado: 146 testes nao-integracao passaram, 43 testes de
+integracao passaram. Permanece apenas warning local do pytest cache por
+permissao de `.pytest_cache` no ambiente Windows.
+
+Livedoc: Google Docs externo nao foi atualizado por falta de autorizacao
+explicita; este checkpoint local deve ser sincronizado na task 09.
 
 ## Restrição de overhead local
 

@@ -22,6 +22,7 @@ from app.modules.appointments.infrastructure.repositories import (
     SQLAlchemyAppointmentSlotRepository,
 )
 from app.modules.appointments.schemas.booking import PublicAppointmentBookingCreate
+from app.modules.customers.application.input_ports import CustomerCreatorGetter
 from app.modules.customers.application.use_cases import (
     GetOrCreateCustomerByPhoneUseCase,
 )
@@ -29,6 +30,7 @@ from app.modules.customers.infrastructure.models import Customer
 from app.modules.customers.infrastructure.repositories import (
     SQLAlchemyCustomerRepository,
 )
+from app.modules.customers.schemas.customer import CustomerGetOrCreateByPhone
 from app.modules.offerings.application.exceptions import OfferingNotFound
 from app.modules.offerings.infrastructure.models import Offering
 from app.modules.offerings.infrastructure.repositories import (
@@ -81,10 +83,54 @@ class AvailableSlotsRetrieverStub:
         ]
 
 
+class AsyncBarrier:
+    def __init__(self, count: int) -> None:
+        self.count = count
+        self.waiting = 0
+        self.event = asyncio.Event()
+        self.lock = asyncio.Lock()
+
+    async def wait(self) -> None:
+        async with self.lock:
+            self.waiting += 1
+            if self.waiting >= self.count:
+                self.event.set()
+
+        await asyncio.wait_for(self.event.wait(), timeout=5)
+
+
+class CoordinatedCustomerCreatorGetter:
+    def __init__(
+        self,
+        customers: SQLAlchemyCustomerRepository,
+        barrier: AsyncBarrier,
+    ) -> None:
+        self.customers = customers
+        self.barrier = barrier
+
+    async def execute(self, payload: CustomerGetOrCreateByPhone) -> Customer:
+        customer = await self.customers.get_by_phone(payload.phone)
+        if customer is not None:
+            return customer
+
+        await self.barrier.wait()
+        customer = Customer(
+            id=uuid4(),
+            name=payload.name,
+            phone=payload.phone,
+            confirmed_phone=True,
+            email=payload.email,
+        )
+        await self.customers.add(customer)
+
+        return customer
+
+
 def build_use_case(
     session: AsyncSession,
     *,
     available_slots: Optional[AvailableSlotsRetrieverStub] = None,
+    customer_creator_getter: Optional[CustomerCreatorGetter] = None,
 ) -> BookPublicAppointmentUseCase:
     available_slots_retriever = available_slots or AvailableSlotsRetrieverStub()
     get_or_create_customer_by_phone = GetOrCreateCustomerByPhoneUseCase(
@@ -96,7 +142,9 @@ def build_use_case(
         appointment_slots=SQLAlchemyAppointmentSlotRepository(session),
         offerings=SqlAlchemyOfferingRepository(session),
         providers=SqlAlchemyProviderRepository(session),
-        get_or_create_customer_by_phone=get_or_create_customer_by_phone,
+        get_or_create_customer_by_phone=(
+            customer_creator_getter or get_or_create_customer_by_phone
+        ),
         list_provider_available_slots=available_slots_retriever,
         uow=SqlAlchemyUnitOfWork(session),
     )
@@ -237,9 +285,14 @@ async def list_appointment_slots(
 async def execute_booking(
     provider_slug: str,
     payload: PublicAppointmentBookingCreate,
+    idempotency_key: Optional[str] = None,
 ) -> Appointment:
     async with async_session_factory() as session:
-        return await build_use_case(session).execute(provider_slug, payload)
+        return await build_use_case(session).execute(
+            provider_slug,
+            payload,
+            idempotency_key,
+        )
 
 
 async def test_books_public_appointment_for_new_customer() -> None:
@@ -524,4 +577,59 @@ async def test_book_public_appointment_allows_one_concurrent_slot_booking() -> N
     assert [slot.slot_start_at for slot in slots] == [
         start_at,
         start_at + timedelta(minutes=15),
+    ]
+
+
+async def test_booking_allows_concurrent_same_phone_different_slots() -> None:
+    customer_phone = unique_phone()
+    first_start_at = datetime(2026, 6, 10, 18, 0, tzinfo=UTC)
+    second_start_at = datetime(2026, 6, 10, 18, 30, tzinfo=UTC)
+
+    async with async_session_factory() as session:
+        provider, offering = await create_provider_with_offering(session)
+
+    first_payload = booking_payload(
+        offering.id,
+        start_at=first_start_at,
+        customer_phone=customer_phone,
+        customer_name='First Customer',
+    )
+    second_payload = booking_payload(
+        offering.id,
+        start_at=second_start_at,
+        customer_phone=customer_phone,
+        customer_name='Second Customer',
+    )
+    barrier = AsyncBarrier(2)
+
+    async def execute_coordinated_booking(
+        payload: PublicAppointmentBookingCreate,
+    ) -> Appointment:
+        async with async_session_factory() as session:
+            customers = SQLAlchemyCustomerRepository(session)
+            return await build_use_case(
+                session,
+                customer_creator_getter=CoordinatedCustomerCreatorGetter(
+                    customers,
+                    barrier,
+                ),
+            ).execute(provider.slug, payload)
+
+    results = await asyncio.gather(
+        execute_coordinated_booking(first_payload),
+        execute_coordinated_booking(second_payload),
+    )
+
+    assert len(results) == 2
+    assert {result.start_at for result in results} == {first_start_at, second_start_at}
+    assert results[0].customer_id == results[1].customer_id
+
+    async with async_session_factory() as session:
+        appointments = await list_provider_appointments(session, provider.id)
+        customer_count = await count_customers_by_phone(session, customer_phone)
+
+    assert customer_count == 1
+    assert [appointment.start_at for appointment in appointments] == [
+        first_start_at,
+        second_start_at,
     ]

@@ -20,3 +20,7 @@ class AppointmentIdempotencyConflict(AppointmentError):
 
 class AppointmentStartUnavailable(AppointmentError):
     pass
+
+
+class AppointmentPersistenceConflict(AppointmentError):
+    pass
